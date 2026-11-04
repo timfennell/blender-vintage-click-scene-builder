@@ -11,9 +11,10 @@ HEADS = {h["name"]: h for h in KIT["heads"]}
 GELS = {g["name"]: g for g in KIT["gels"]}
 MODIFIERS = {m["name"]: m for m in KIT["modifiers"]}
 
-# 3200 K tungsten in linear Rec.709, as the game's `tungsten` (normalised to green there;
+# 3200 K tungsten in linear Rec.709, the game's `tungsten` (normalised to green there;
 # here to its brightest channel, so it is a valid Blender colour).
-TUNGSTEN = (1.0, 0.80, 0.56)
+_T = KIT.get("tungstenRGB", (1.0, 0.80, 0.56))
+TUNGSTEN = tuple(c / max(_T) for c in _T)
 
 START_NAME = "VC Start"
 

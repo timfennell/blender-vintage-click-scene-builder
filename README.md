@@ -41,10 +41,9 @@ section of the plan for every key.
 
 ## kit.json
 
-The heads, gels, modifiers, house levels and scene-light choices. It was copied by hand
-from the game's `Lights.swift`, `Filters.swift` and `main.swift` (gel colours computed as
-the game does); once the game has `VintageClick --export-kit kit.json`, regenerate it
-with that.
+The heads, gels, modifiers, house levels, scene-light choices and the tungsten colour,
+exported by the game: `VintageClick --export-kit kit.json`. Re-export it whenever the
+game's kit changes; the add-on stores everything by name.
 
 ## Test
 
