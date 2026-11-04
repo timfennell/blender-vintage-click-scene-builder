@@ -144,6 +144,14 @@ def build_and_check(scan_path, tag):
           abs(math.degrees(soft.data.spot_size) - 35) < 1e-3)
     bpy.data.objects.remove(soft)
 
+    box = ops.add_bound(ctx, 'BOX', location=(0.5, 1.0, 1.2))
+    box.rotation_euler = Euler((0, 0, math.radians(25)))
+    box.scale = (4, 2.5, 1.5)                   # non-uniform
+    box.empty_display_size = 1.5
+    ball = ops.add_bound(ctx, 'SPHERE', location=(-3, 2, 1))
+    ball.scale = (2, 2, 2)
+    ball.empty_display_size = 0.75
+
     spk = ops.add_speaker(ctx, D + "stream.wav", location=(-2, -1, 0.3))
     spk.data.volume = 0.7
     spk.data.distance_reference = 3
@@ -195,6 +203,15 @@ def build_and_check(scan_path, tag):
           and k["modifier"] == "Barn doors, a slash" and k["flare"] is True, str(k))
     check(f"[{tag}] gobo settings", g["modifier"] == "Gobo: window" and abs(g["patternFocus"] - 0.1) < 1e-6
           and g["flare"] is False and g["gel"] == "No gel", str(g))
+    bd = {b["shape"]: b for b in s["bounds"]}
+    check(f"[{tag}] two bounds", len(s["bounds"]) == 2 and set(bd) == {"box", "sphere"})
+    for obj, shape in ((box, "box"), (ball, "sphere")):
+        m = Matrix([bd[shape]["matrix"][r * 4:r * 4 + 4] for r in range(4)])
+        check(f"[{tag}] {shape} centre round-trips", close(M @ m.translation, obj.matrix_world.translation),
+              f"{tuple(M @ m.translation)} vs {tuple(obj.matrix_world.translation)}")
+        sz = obj.empty_display_size
+        check(f"[{tag}] {shape} unit corner is the drawn corner",
+              close(M @ (m @ Vector((1, 1, 1))), obj.matrix_world @ Vector((sz, sz, sz))))
     snd = s["sounds"]
     check(f"[{tag}] speaker", len(snd) == 1 and snd[0]["file"] == "sounds/stream.wav" and
           abs(snd[0]["volume"] - 0.7) < 1e-6 and snd[0]["fullWithinM"] == 3 and snd[0]["silentBeyondM"] == 25 and
@@ -223,10 +240,18 @@ def build_and_check(scan_path, tag):
     r = bpy.ops.vcs.add_light(head="Softlight 2K")
     added = ctx.view_layer.objects.active
     check(f"[{tag}] Add VC Light operator", r == {'FINISHED'} and added.data.vc.is_vc and added.data.type == 'AREA')
+    r = bpy.ops.vcs.add_bound(shape='CYLINDER')
+    cyl = ctx.view_layer.objects.active
+    zs = [v.co.z for v in cyl.data.vertices]
+    rs = [math.hypot(v.co.x, v.co.y) for v in cyl.data.vertices]
+    check(f"[{tag}] Add Bound Cylinder is a unit cylinder on Z", r == {'FINISHED'} and cyl["vc_bound"] == 'CYLINDER'
+          and abs(min(zs) + 1) < 1e-5 and abs(max(zs) - 1) < 1e-5 and abs(max(rs) - 1) < 1e-5)
     r = bpy.ops.vcs.save_scene(filepath=D + f"op_{tag}.vcscene")
     s2 = json.loads(zipfile.ZipFile(D + f"op_{tag}.vcscene").read("scene.json"))
-    check(f"[{tag}] Save .vcscene operator", r == {'FINISHED'} and len(s2["lights"]) == 3)
+    check(f"[{tag}] Save .vcscene operator", r == {'FINISHED'} and len(s2["lights"]) == 3 and
+          [b["shape"] for b in s2["bounds"]] == ["box", "cylinder", "sphere"])
     bpy.data.objects.remove(added)
+    bpy.data.objects.remove(cyl)
     if tag == "0":
         print(json.dumps(s, indent=1)[:1500])
 

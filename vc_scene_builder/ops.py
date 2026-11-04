@@ -36,6 +36,42 @@ def add_light(context, head, location=None):
     return obj
 
 
+BOUND_ITEMS = [('BOX', "Box", "A box the camera can move inside"),
+               ('SPHERE', "Sphere", "A sphere the camera can move inside"),
+               ('CYLINDER', "Cylinder", "An upright cylinder the camera can move inside")]
+
+
+def _unit_cylinder():
+    me = bpy.data.meshes.get("VC Bound Cylinder")
+    if me is None:
+        import bmesh
+        bm = bmesh.new()
+        bmesh.ops.create_cone(bm, cap_ends=True, segments=32, radius1=1, radius2=1, depth=2)
+        me = bpy.data.meshes.new("VC Bound Cylinder")
+        bm.to_mesh(me)
+        bm.free()
+    return me
+
+
+def add_bound(context, shape, location=None):
+    """A movement bound: an empty (box, sphere) or a wireframe unit cylinder (axis local Z)."""
+    pin_scan(context)
+    name = "VC Bound " + shape.title()
+    if shape == 'CYLINDER':
+        obj = bpy.data.objects.new(name, _unit_cylinder())
+        obj.display_type = 'WIRE'
+        obj.hide_render = True
+        obj.visible_camera = obj.visible_shadow = False
+    else:
+        obj = bpy.data.objects.new(name, None)
+        obj.empty_display_type = 'CUBE' if shape == 'BOX' else 'SPHERE'
+        obj.empty_display_size = 1.0
+    obj["vc_bound"] = shape
+    context.collection.objects.link(obj)
+    obj.location = location if location is not None else context.scene.cursor.location
+    return obj
+
+
 def add_speaker(context, filepath, location=None):
     pin_scan(context)
     data = bpy.data.speakers.new(os.path.splitext(os.path.basename(filepath))[0] or "Sound")
@@ -80,6 +116,23 @@ class VCS_OT_add_light(bpy.types.Operator):
 
     def execute(self, context):
         obj = add_light(context, self.head)
+        for o in context.selected_objects:
+            o.select_set(False)
+        obj.select_set(True)
+        context.view_layer.objects.active = obj
+        return {'FINISHED'}
+
+
+class VCS_OT_add_bound(bpy.types.Operator):
+    """Add a movement bound at the 3D cursor: the camera stays inside the union of all bounds"""
+    bl_idname = "vcs.add_bound"
+    bl_label = "Add Bound"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    shape: bpy.props.EnumProperty(name="Shape", items=BOUND_ITEMS)
+
+    def execute(self, context):
+        obj = add_bound(context, self.shape)
         for o in context.selected_objects:
             o.select_set(False)
         obj.select_set(True)
@@ -183,6 +236,7 @@ class VCS_OT_save(bpy.types.Operator, ExportHelper):
             self.report({'WARNING'}, p)
         self.report({'INFO'}, f"Saved {os.path.basename(self.filepath)}: {len(j['lights'])} lights, "
                               f"{len(j['sounds'])} sounds, {len(j['ambience'])} ambience"
+                              + f", {len(j['bounds'])} bounds"
                               + (f" ({len(problems)} missing)" if problems else ""))
         return {'FINISHED'}
 
@@ -191,7 +245,7 @@ def menu_export(self, context):
     self.layout.operator(VCS_OT_save.bl_idname, text="Vintage Click Scene (.vcscene)")
 
 
-CLASSES = (VCS_OT_set_start, VCS_OT_add_light, VCS_OT_select, VCS_OT_add_sound,
+CLASSES = (VCS_OT_set_start, VCS_OT_add_light, VCS_OT_add_bound, VCS_OT_select, VCS_OT_add_sound,
            VCS_OT_ambience_add, VCS_OT_ambience_remove, VCS_OT_save)
 
 

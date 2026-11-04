@@ -108,6 +108,26 @@ class VCS_UL_ambience(bpy.types.UIList):
         row.prop(item, "volume", text="")
 
 
+class VCS_PT_bounds(_Panel, bpy.types.Panel):
+    bl_label = "Bounds"
+
+    def draw(self, context):
+        layout = self.layout
+        col = layout.column(align=True)
+        for shape, icon in (('BOX', 'MESH_CUBE'), ('SPHERE', 'MESH_UVSPHERE'), ('CYLINDER', 'MESH_CYLINDER')):
+            col.operator("vcs.add_bound", text=f"Add Bound {shape.title()}", icon=icon).shape = shape
+        found = bundle.bounds(context.scene)
+        if not found:
+            layout.label(text="No bounds: the camera goes anywhere")
+            return
+        layout.label(text="The camera stays inside any of these:")
+        active = context.active_object
+        for o in found:
+            layout.operator("vcs.select", text=o.name, depress=(o == active),
+                            icon='CUBE' if o["vc_bound"] == 'BOX' else
+                            'SPHERE' if o["vc_bound"] == 'SPHERE' else 'MESH_CYLINDER').name = o.name
+
+
 class VCS_PT_sounds(_Panel, bpy.types.Panel):
     bl_label = "Sounds"
 
@@ -133,7 +153,7 @@ class VCS_PT_sounds(_Panel, bpy.types.Panel):
         col.operator("vcs.ambience_remove", text="", icon='REMOVE')
 
 
-CLASSES = (VCS_PT_scene, VCS_PT_start, VCS_PT_sky, VCS_PT_house, VCS_PT_lights, VCS_UL_ambience, VCS_PT_sounds)
+CLASSES = (VCS_PT_scene, VCS_PT_start, VCS_PT_sky, VCS_PT_house, VCS_PT_lights, VCS_PT_bounds, VCS_UL_ambience, VCS_PT_sounds)
 
 
 def register():

@@ -21,6 +21,9 @@ saves it as one self-contained `.vcscene` file the game opens.
   spot/flood, dimmer, gel, modifier (only those that fit the head: gobos for the ellipsoidal,
   doors, flags and cookies for the others), pattern focus and flare are saved by name; the
   Blender light previews the beam angle, tungsten × gel colour and the energy.
+- **Bounds**: *Add Bound Box / Sphere / Cylinder* add a movement bound (an empty drawn as a
+  cube or sphere; a wireframe unit cylinder along its local Z). Move, rotate and scale them
+  freely, unevenly too. The camera may go anywhere inside their union; no bounds, no limit.
 - **Sounds**: *Add Sound Emitter* adds a Speaker (looping in the game) with volume,
   *Full Within* and *Silent Beyond* distances. **Ambience** holds beds that play everywhere.
 
@@ -31,7 +34,9 @@ area synced first). Without it, set **Source PLY** and the file is copied in as 
 
 A zip: `scene.json`, `scene.ply` (stored), `sky/…`, `sounds/…`. All positions and
 directions are in the PLY's own coordinates (`scan.matrix_world.inverted()`); `up` is
-Blender's +Z in those coordinates. Distances for sounds are in metres. See the format
+Blender's +Z in those coordinates. Distances for sounds are in metres. Each bound is
+`{"shape": "box"|"sphere"|"cylinder", "matrix": [16, row-major]}`, mapping the unit
+primitive (box |x|,|y|,|z| ≤ 1; sphere r ≤ 1; cylinder x²+y² ≤ 1, |z| ≤ 1) into PLY space. See the format
 section of the plan for every key.
 
 ## kit.json

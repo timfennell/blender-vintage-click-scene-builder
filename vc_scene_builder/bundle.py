@@ -12,7 +12,7 @@ import tempfile
 import zipfile
 
 import bpy
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 from .props import KIT, START_NAME, metres_per_unit
 
@@ -61,6 +61,20 @@ class Space:
 
 def vc_lights(scene):
     return [o for o in scene.objects if o.type == 'LIGHT' and o.data.vc.is_vc]
+
+
+BOUND_SHAPES = {'BOX': "box", 'SPHERE': "sphere", 'CYLINDER': "cylinder"}
+
+
+def bounds(scene):
+    """Objects tagged vc_bound = 'BOX' | 'SPHERE' | 'CYLINDER': the camera stays in their union."""
+    return [o for o in scene.objects if o.get("vc_bound") in BOUND_SHAPES]
+
+
+def bound_unit(obj):
+    """How big the object's unit primitive is in its own space: an empty draws at its display
+    size; the cylinder mesh is built at unit size."""
+    return obj.empty_display_size if obj.type == 'EMPTY' else 1.0
 
 
 def speakers(scene):
@@ -166,6 +180,15 @@ def describe(context, scan):
         if arc:
             amb.append({"file": arc, "volume": round(a.volume, 4)})
     j["ambience"] = amb
+
+    # The unit primitive (box |x|,|y|,|z| <= 1; sphere r <= 1; cylinder x²+y² <= 1, |z| <= 1)
+    # into PLY space, row-major.
+    out = []
+    for o in sorted(bounds(scene), key=lambda o: o.name):
+        m = sp.inv @ o.matrix_world @ Matrix.Scale(bound_unit(o), 4)
+        out.append({"shape": BOUND_SHAPES[o["vc_bound"]],
+                    "matrix": [round(m[r][c], 7) + 0.0 for r in range(4) for c in range(4)]})
+    j["bounds"] = out
     return j, files, problems
 
 
