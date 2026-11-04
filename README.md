@@ -22,10 +22,15 @@ saves it as one self-contained `.vcscene` file the game opens.
   doors, flags and cookies for the others), pattern focus and flare are saved by name; the
   Blender light previews the beam angle, tungsten × gel colour and the energy.
 - **Fog**: ambient fog through the whole scene (visibility in metres, colour, a height
-  fall-off that halves it about every so many metres above a base height, full below it),
-  lit by the scene's own light. *Add Fog Patch* (box, sphere, cylinder) adds a unit mesh
-  with a Principled Volume previewing its visibility and colour, plus an edge softness; a
-  flattened box over a pond makes mist. Patches show as wire in the solid viewport.
+  fall-off that halves it about every so many metres above a base height, full below it).
+  *Add Fog Patch* (box, sphere, cylinder) adds a unit mesh: a flattened box over a pond
+  makes mist. Each patch has visibility, colour, edge softness and its own height fall-off
+  (from its lowest point). Both can vary in 3D (*Variation*: amount, size in metres,
+  detail, seed) and have an *Anisotropy* (forward scattering: beams glow as you look into
+  them). VC lights shine through the fog and objects cast shadows into it; each light's
+  *Beam in Fog* sets how strongly. Blender previews all this with volume materials (the
+  ambient fog in a box round the scan) and turns on EEVEE's volumetric shadows; Cycles
+  shows it too. Light modifiers (doors, cookies, gobos) aren't previewed in Blender yet.
 - **Bounds**: *Add Bound Box / Sphere / Cylinder* add a movement bound (an empty drawn as a
   cube or sphere; a wireframe unit cylinder along its local Z). Move, rotate and scale them
   freely, unevenly too. The camera may go anywhere inside their union; no bounds, no limit.

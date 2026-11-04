@@ -4,8 +4,8 @@ import bpy
 from bpy_extras.io_utils import ExportHelper, ImportHelper
 from mathutils import Matrix
 
-from . import bundle
-from .props import HEAD_ITEMS, HEADS, START_NAME, fog_preview, pin_scan, preview, scan_of
+from . import bundle, fog
+from .props import HEAD_ITEMS, HEADS, START_NAME, pin_scan, preview, scan_of
 
 
 def place_start(context, matrix):
@@ -100,20 +100,10 @@ def add_fog_patch(context, shape, location=None):
     obj = bpy.data.objects.new(name, _unit_mesh(shape, name))
     obj["vc_fog"] = shape
     obj.display_type = 'WIRE'               # wire in the solid viewport; the volume renders
-    mat = bpy.data.materials.new(name)
-    mat.use_nodes = True
-    nt = mat.node_tree
-    for n in list(nt.nodes):
-        if n.type != 'OUTPUT_MATERIAL':
-            nt.nodes.remove(n)
-    out = next(n for n in nt.nodes if n.type == 'OUTPUT_MATERIAL')
-    vol = nt.nodes.new("ShaderNodeVolumePrincipled")
-    vol.location = out.location.x - 300, out.location.y
-    nt.links.new(vol.outputs[0], out.inputs["Volume"])
-    obj.data.materials.append(mat)
     context.collection.objects.link(obj)
     obj.location = location if location is not None else context.scene.cursor.location
-    fog_preview(obj, context.scene)
+    context.view_layer.update()
+    fog.update_patch(obj, context.scene)
     return obj
 
 

@@ -99,6 +99,7 @@ class VCS_PT_lights(_Panel, bpy.types.Panel):
             sub.active = s.modifier.startswith(("Gobo", "Cookie"))
             sub.prop(s, "pattern_focus")
             col.prop(s, "flare")
+            col.prop(s, "fog_scatter")
 
 
 class VCS_UL_ambience(bpy.types.UIList):
@@ -106,6 +107,16 @@ class VCS_UL_ambience(bpy.types.UIList):
         row = layout.row(align=True)
         row.prop(item, "file", text="", emboss=False)
         row.prop(item, "volume", text="")
+
+
+def _variation(layout, owner, prefix):
+    box = layout.box()
+    box.prop(owner, prefix + "variation")
+    sub = box.column(align=True)
+    sub.active = getattr(owner, prefix + "variation") > 0
+    sub.prop(owner, prefix + "variation_size", text="Size (m)")
+    sub.prop(owner, prefix + "variation_detail")
+    sub.prop(owner, prefix + "variation_seed")
 
 
 class VCS_PT_fog(_Panel, bpy.types.Panel):
@@ -121,6 +132,8 @@ class VCS_PT_fog(_Panel, bpy.types.Panel):
         col.prop(vc, "fog_colour")
         col.prop(vc, "fog_falloff", text="Height Fall-off (m)")
         col.prop(vc, "fog_base")
+        col.prop(vc, "fog_anisotropy")
+        _variation(col, vc, "fog_")
         layout.separator()
         layout.operator_menu_enum("vcs.add_fog_patch", "shape", text="Add Fog Patch", icon='OUTLINER_DATA_VOLUME')
         active = context.active_object
@@ -133,6 +146,9 @@ class VCS_PT_fog(_Panel, bpy.types.Panel):
             col.prop(active.vc_fog, "visibility", text="Visibility (m)")
             col.prop(active.vc_fog, "colour")
             col.prop(active.vc_fog, "softness")
+            col.prop(active.vc_fog, "height_falloff", text="Height Fall-off (m)")
+            col.prop(active.vc_fog, "anisotropy")
+            _variation(col, active.vc_fog, "")
 
 
 class VCS_PT_bounds(_Panel, bpy.types.Panel):

@@ -55,6 +55,14 @@ def is_splat(obj):
     return "radiance:base" in names or any(n.startswith("f_dc") for n in names)
 
 
+def scan_of_scene(scene):
+    """The chosen scan, else the scene's only splat object (no context needed)."""
+    if scene.vc.scan is not None:
+        return scene.vc.scan
+    found = [o for o in scene.objects if is_splat(o)]
+    return found[0] if len(found) == 1 else None
+
+
 def scan_of(context):
     """The chosen scan, else the active splat object (what Splat Patch works on), else the
     scene's only splat object."""
@@ -110,6 +118,7 @@ def preview(light, scene=None):
     lumens = head["lumens"] * 2.0 ** s.dimmer_stops * peak
     scale = scene.unit_settings.scale_length if scene else 1.0
     half = math.radians(angle) / 2
+    light.volume_factor = s.fog_scatter
     if want == 'SPOT':
         light.spot_size = math.radians(min(angle, 180))
         light.spot_blend = 0.15 if head["kind"] == "ellipsoidal" else 0.6
@@ -150,6 +159,9 @@ class VCLightSettings(bpy.types.PropertyGroup):
         description="A gobo's focus (0 sharp, 1 soft), or how far a cookie stands from the head (0 near: soft, 1 far: crisper)")
     flare: bpy.props.BoolProperty(name="Flare", default=True,
                                   description="Lens flare from this light when it shines into the lens")
+    fog_scatter: bpy.props.FloatProperty(name="Beam in Fog", min=0, soft_max=2, default=1, subtype='FACTOR',
+                                         update=_light_update,
+                                         description="How strongly this light's beam shows in fog (1: physical, 0: none)")
 
 
 # ---------------------------------------------------------------- sky
@@ -207,6 +219,58 @@ def _scan_poll(self, obj):
     return is_splat(obj)
 
 
+# ---------------------------------------------------------------- fog
+def _patch_update(self, context):
+    from . import fog
+    fog.update_patch(self.id_data, context.scene)
+
+
+def _ambient_update(self, context):
+    from . import fog
+    fog.update_ambient(context.scene)
+
+
+def _variation_props(update, size_default):
+    """Shared by the ambient fog and the patches: 3D variation through the fog."""
+    return dict(
+        amount=bpy.props.FloatProperty(name="Variation", min=0, max=1, default=0, subtype='FACTOR', update=update,
+                                       description="How much the fog thickens and thins through space (0: even)"),
+        size=bpy.props.FloatProperty(name="Size", min=0.01, soft_max=500, default=size_default, update=update,
+                                     description="Size of the wisps and banks (metres)"),
+        detail=bpy.props.IntProperty(name="Detail", min=0, max=8, default=3, update=update,
+                                     description="Finer wisps on the larger banks (noise octaves)"),
+        seed=bpy.props.IntProperty(name="Seed", min=0, default=0, update=update,
+                                   description="Picks a different pattern"))
+
+
+ANISOTROPY_DOC = ("How much the fog scatters light forward: beams glow when you look into them "
+                  "(0: evenly every way; real fog is about 0.5-0.8)")
+_pv = _variation_props(_patch_update, 1.0)
+
+
+class VCFogPatch(bpy.types.PropertyGroup):
+    visibility: bpy.props.FloatProperty(name="Visibility", min=0.05, soft_max=1000, default=5,
+                                        description="How far you can see through it (metres)",
+                                        update=_patch_update)
+    colour: bpy.props.FloatVectorProperty(name="Colour", subtype='COLOR', size=3, min=0, max=1,
+                                          default=(1, 1, 1), update=_patch_update)
+    softness: bpy.props.FloatProperty(name="Softness", min=0, max=1, default=0.4, subtype='FACTOR',
+                                      update=_patch_update,
+                                      description="Share of the radius over which the edge fades out")
+    height_falloff: bpy.props.FloatProperty(
+        name="Height Fall-off", min=0, soft_max=50, default=0, update=_patch_update,
+        description="The fog halves about every this many metres above the patch's lowest point (0: even)")
+    anisotropy: bpy.props.FloatProperty(name="Anisotropy", min=0, max=0.95, default=0.6,
+                                        update=_patch_update, description=ANISOTROPY_DOC)
+    variation: _pv["amount"]
+    variation_size: _pv["size"]
+    variation_detail: _pv["detail"]
+    variation_seed: _pv["seed"]
+
+
+_av = _variation_props(_ambient_update, 20.0)
+
+
 class VCSceneSettings(bpy.types.PropertyGroup):
     scene_name: bpy.props.StringProperty(name="Name", description="Shown as the game's window title (blank: the Blender scene's name)")
     scan: bpy.props.PointerProperty(name="Scan", type=bpy.types.Object, poll=_scan_poll,
@@ -228,53 +292,24 @@ class VCSceneSettings(bpy.types.PropertyGroup):
     house_lights: bpy.props.EnumProperty(name="House Lights", items=HOUSE_ITEMS)
     ambience: bpy.props.CollectionProperty(type=VCAmbience)
     ambience_index: bpy.props.IntProperty()
-    fog: bpy.props.BoolProperty(name="Ambient Fog", description="Fog through the whole scene, lit by the scene's own light")
+    fog: bpy.props.BoolProperty(name="Ambient Fog", update=_ambient_update,
+                                description="Fog through the whole scene, lit by the scene's light and the VC lights")
     fog_visibility: bpy.props.FloatProperty(name="Visibility", min=1, soft_max=20000, default=300,
+                                            update=_ambient_update,
                                             description="How far you can see through it (metres)")
     fog_colour: bpy.props.FloatVectorProperty(name="Colour", subtype='COLOR', size=3, min=0, max=1,
-                                              default=(1, 1, 1))
+                                              default=(1, 1, 1), update=_ambient_update)
     fog_falloff: bpy.props.FloatProperty(name="Height Fall-off", min=0, soft_max=200, default=8,
+                                         update=_ambient_update,
                                          description="The fog halves about every this many metres above its base (0: even everywhere)")
-    fog_base: bpy.props.FloatProperty(name="Base Height", default=0, unit='LENGTH',
+    fog_base: bpy.props.FloatProperty(name="Base Height", default=0, unit='LENGTH', update=_ambient_update,
                                       description="World Z of the ground: below it the fog stays at full density")
-
-
-# ---------------------------------------------------------------- fog
-# Meteorological visibility: where contrast falls to 2% through fog of extinction sigma,
-# V = ln(50) / sigma (3.912 / sigma).
-VISIBILITY_K = 3.912
-
-
-def fog_density(visibility_m, scene):
-    """Principled Volume density (per Blender unit) for a visibility in metres."""
-    return VISIBILITY_K / max(visibility_m, 1e-3) * scene.unit_settings.scale_length
-
-
-def fog_preview(obj, scene):
-    """Keep a fog patch's volume material showing its visibility and colour."""
-    f = obj.vc_fog
-    mat = obj.active_material
-    if mat is None or not mat.use_nodes:
-        return
-    vol = next((n for n in mat.node_tree.nodes if n.type == 'PRINCIPLED_VOLUME'), None)
-    if vol is None:
-        return
-    vol.inputs["Density"].default_value = fog_density(f.visibility, scene)
-    vol.inputs["Color"].default_value = (*f.colour, 1.0)
-
-
-def _fog_update(self, context):
-    fog_preview(self.id_data, context.scene)
-
-
-class VCFogPatch(bpy.types.PropertyGroup):
-    visibility: bpy.props.FloatProperty(name="Visibility", min=0.05, soft_max=1000, default=5, unit='LENGTH',
-                                        description="How far you can see through it (metres)",
-                                        update=_fog_update)
-    colour: bpy.props.FloatVectorProperty(name="Colour", subtype='COLOR', size=3, min=0, max=1,
-                                          default=(1, 1, 1), update=_fog_update)
-    softness: bpy.props.FloatProperty(name="Softness", min=0, max=1, default=0.4, subtype='FACTOR',
-                                      description="Share of the radius over which the edge fades out")
+    fog_anisotropy: bpy.props.FloatProperty(name="Anisotropy", min=0, max=0.95, default=0.6,
+                                            update=_ambient_update, description=ANISOTROPY_DOC)
+    fog_variation: _av["amount"]
+    fog_variation_size: _av["size"]
+    fog_variation_detail: _av["detail"]
+    fog_variation_seed: _av["seed"]
 
 
 CLASSES = (VCLightSettings, VCAmbience, VCFogPatch, VCSceneSettings)

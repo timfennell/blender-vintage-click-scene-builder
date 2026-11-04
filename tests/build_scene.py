@@ -25,7 +25,7 @@ if os.path.isdir(GS_PATCH):
     gs_patch.register()
 import vc_scene_builder
 vc_scene_builder.register()
-from vc_scene_builder import bundle, ops, props
+from vc_scene_builder import bundle, fog, ops, props
 
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 SCANS = argv or ["/Users/timothyfennell/Downloads/Big Bee/scene.ply"]
@@ -157,18 +157,39 @@ def build_and_check(scan_path, tag):
     vc.fog_colour = (0.9, 0.95, 1.0)
     vc.fog_falloff = 8
     vc.fog_base = 0.4
+    vc.fog_anisotropy = 0.7
+    vc.fog_variation = 0.5
+    vc.fog_variation_size = 12
+    vc.fog_variation_seed = 3
+    amb = bpy.data.objects.get(fog.AMBIENT_NAME)
+    check(f"[{tag}] ambient fog previews in a box round the scan", amb is not None and amb.active_material is not None
+          and any(n.type == 'TEX_NOISE' for n in amb.active_material.node_tree.nodes))
     mist = ops.add_fog_patch(ctx, 'BOX', location=(1.5, -0.5, 0.2))
     mist.rotation_euler = Euler((0, 0, math.radians(-20)))
     mist.scale = (3, 2, 0.3)                    # a flat slab over a pond
     mist.vc_fog.visibility = 4
     mist.vc_fog.colour = (0.8, 0.85, 0.9)
     mist.vc_fog.softness = 0.5
+    mist.vc_fog.height_falloff = 0.5
+    mist.vc_fog.variation = 0.8
+    mist.vc_fog.variation_size = 0.6
+    mist.vc_fog.variation_detail = 4
+    mist.location.z = 0.6                       # moved after setting: the handler keeps its base
+    ctx.view_layer.update()
+    base_node = mist.active_material.node_tree.nodes["VC Base"].outputs[0].default_value
+    check(f"[{tag}] fog patch base follows its lowest point", abs(base_node - (0.6 - 0.3)) < 1e-5, f"{base_node:.4f}")
+    check(f"[{tag}] EEVEE set to shadow the fog", scene.eevee.use_volumetric_shadows and scene.eevee.volumetric_end > 10)
+    key.data.vc.fog_scatter = 0.5
+    check(f"[{tag}] Beam in Fog sets the light's volume factor", abs(key.data.volume_factor - 0.5) < 1e-6)
     zs = [v.co.z for v in mist.data.vertices]
     check(f"[{tag}] fog patch mesh is the unit box", abs(min(zs) + 1) < 1e-6 and abs(max(zs) - 1) < 1e-6)
-    vnode = next(n for n in mist.active_material.node_tree.nodes if n.type == 'PRINCIPLED_VOLUME')
-    check(f"[{tag}] fog patch previews its density and colour",
-          abs(vnode.inputs["Density"].default_value - 3.912 / 4) < 1e-5 and
-          abs(vnode.inputs["Color"].default_value[0] - 0.8) < 1e-6 and mist.display_type == 'WIRE')
+    nodes = mist.active_material.node_tree.nodes
+    vnode = next(n for n in nodes if n.type == 'PRINCIPLED_VOLUME')
+    check(f"[{tag}] fog patch previews density, colour, edge, height and variation",
+          abs(nodes["VC Density"].outputs[0].default_value - 3.912 / 4) < 1e-5 and
+          abs(vnode.inputs["Color"].default_value[0] - 0.8) < 1e-6 and vnode.inputs["Density"].is_linked and
+          any(n.type == 'MAP_RANGE' for n in nodes) and any(n.type == 'TEX_NOISE' for n in nodes) and
+          mist.display_type == 'WIRE')
 
     spk = ops.add_speaker(ctx, D + "stream.wav", location=(-2, -1, 0.3))
     spk.data.volume = 0.7
@@ -218,7 +239,8 @@ def build_and_check(scan_path, tag):
               close(to_world_dir(l["aim"]), obj.matrix_world.to_3x3() @ Vector((0, 0, -1))))
     k, g = L["Fresnel 2K"], L["Ellipsoidal 750"]
     check(f"[{tag}] key settings", k["spot"] == 0.8 and k["dimmerStops"] == -1 and k["gel"] == "Rosmont 07 Pale Straw"
-          and k["modifier"] == "Barn doors, a slash" and k["flare"] is True, str(k))
+          and k["modifier"] == "Barn doors, a slash" and k["flare"] is True
+          and k["fogScatter"] == 0.5, str(k))
     check(f"[{tag}] gobo settings", g["modifier"] == "Gobo: window" and abs(g["patternFocus"] - 0.1) < 1e-6
           and g["flare"] is False and g["gel"] == "No gel", str(g))
     bd = {b["shape"]: b for b in s["bounds"]}
@@ -232,11 +254,14 @@ def build_and_check(scan_path, tag):
               close(M @ (m @ Vector((1, 1, 1))), obj.matrix_world @ Vector((sz, sz, sz))))
     fg = s["fog"]
     check(f"[{tag}] ambient fog", fg["visibilityM"] == 300 and fg["heightFalloffM"] == 8 and
-          close(fg["colour"], (0.9, 0.95, 1.0)), str(fg))
+          close(fg["colour"], (0.9, 0.95, 1.0)) and fg["anisotropy"] == 0.7 and
+          fg["variation"] == {"amount": 0.5, "sizeM": 12, "detail": 3, "seed": 3}, str(fg))
     check(f"[{tag}] fog base round-trips", close(M @ Vector(fg["base"]), (0, 0, 0.4)))
     fv = s["fogVolumes"]
     check(f"[{tag}] one fog patch", len(fv) == 1 and fv[0]["shape"] == "box" and fv[0]["visibilityM"] == 4
-          and fv[0]["softness"] == 0.5 and close(fv[0]["colour"], (0.8, 0.85, 0.9)), str(fv))
+          and fv[0]["softness"] == 0.5 and close(fv[0]["colour"], (0.8, 0.85, 0.9)) and fv[0]["heightFalloffM"] == 0.5
+          and fv[0]["anisotropy"] == 0.6 and fv[0]["variation"] == {"amount": 0.8, "sizeM": 0.6, "detail": 4, "seed": 0},
+          str(fv))
     m = Matrix([fv[0]["matrix"][r * 4:r * 4 + 4] for r in range(4)])
     check(f"[{tag}] fog patch centre round-trips", close(M @ m.translation, mist.matrix_world.translation))
     check(f"[{tag}] fog patch unit corner is its mesh corner",
@@ -288,7 +313,8 @@ def build_and_check(scan_path, tag):
     bpy.data.objects.remove(ball_fog)
     vc.fog = False
     s3 = bundle.describe(ctx, scan)[0]
-    check(f"[{tag}] no fog key when ambient fog is off", "fog" not in s3)
+    check(f"[{tag}] no fog key when ambient fog is off", "fog" not in s3 and
+          bpy.data.objects.get(fog.AMBIENT_NAME) is None and len(s3["fogVolumes"]) == 1)
     if tag == "0":
         print(json.dumps(s, indent=1)[:1500])
 

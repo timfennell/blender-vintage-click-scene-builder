@@ -93,6 +93,10 @@ def _number(x):
     return int(x) if float(x).is_integer() else float(x)
 
 
+def _variation(amount, size_m, detail, seed):
+    return {"amount": round(amount, 4), "sizeM": round(size_m, 4), "detail": int(detail), "seed": int(seed)}
+
+
 class _Names:
     """Unique archive names within a folder (two 'wind.wav's become wind.wav, wind_2.wav)."""
 
@@ -164,7 +168,8 @@ def describe(context, scan):
         lights.append({"head": s.head, "position": _vec(sp.point(mw.translation)),
                        "aim": _vec(sp.direction(aim)), "spot": round(s.spot, 4),
                        "dimmerStops": round(s.dimmer_stops, 4), "gel": s.gel, "modifier": s.modifier,
-                       "patternFocus": round(s.pattern_focus, 4), "flare": bool(s.flare)})
+                       "patternFocus": round(s.pattern_focus, 4), "flare": bool(s.flare),
+                       "fogScatter": round(s.fog_scatter, 4)})
     j["lights"] = lights
 
     sounds = []
@@ -202,7 +207,10 @@ def describe(context, scan):
     if vc.fog:
         j["fog"] = {"visibilityM": round(vc.fog_visibility, 4), "colour": _vec(vc.fog_colour, 4),
                     "heightFalloffM": round(vc.fog_falloff, 4),
-                    "base": _vec(sp.point((0, 0, vc.fog_base)))}
+                    "base": _vec(sp.point((0, 0, vc.fog_base))),
+                    "anisotropy": round(vc.fog_anisotropy, 4),
+                    "variation": _variation(vc.fog_variation, vc.fog_variation_size,
+                                            vc.fog_variation_detail, vc.fog_variation_seed)}
     vols = []
     for o in sorted(fog_patches(scene), key=lambda o: o.name):
         m = sp.inv @ o.matrix_world
@@ -210,7 +218,10 @@ def describe(context, scan):
         vols.append({"shape": FOG_SHAPES[o["vc_fog"]],
                      "matrix": [round(m[r][c], 7) + 0.0 for r in range(4) for c in range(4)],
                      "visibilityM": round(f.visibility, 4), "colour": _vec(f.colour, 4),
-                     "softness": round(f.softness, 4)})
+                     "softness": round(f.softness, 4), "heightFalloffM": round(f.height_falloff, 4),
+                     "anisotropy": round(f.anisotropy, 4),
+                     "variation": _variation(f.variation, f.variation_size, f.variation_detail,
+                                             f.variation_seed)})
     j["fogVolumes"] = vols
     return j, files, problems
 
