@@ -1,7 +1,7 @@
 import bpy
 
 from . import bundle
-from .props import START_NAME, metres_per_unit, scan_of
+from .props import metres_per_unit, scan_of, start_camera
 
 
 class _Panel:
@@ -34,7 +34,9 @@ class VCS_PT_scene(_Panel, bpy.types.Panel):
         layout.prop(vc, "kind", expand=True)
         layout.prop(vc, "ev")
         layout.separator()
-        layout.operator("vcs.save_scene", text="Save .vcscene…", icon='EXPORT')
+        row = layout.row(align=True)
+        row.operator("vcs.open_scene", text="Open…", icon='FILE_FOLDER')
+        row.operator("vcs.save_scene", text="Save .vcscene…", icon='EXPORT')
 
 
 class VCS_PT_start(_Panel, bpy.types.Panel):
@@ -43,11 +45,11 @@ class VCS_PT_start(_Panel, bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         layout.operator("vcs.set_start_from_view", icon='CAMERA_DATA')
-        cam = context.scene.objects.get(START_NAME)
-        if cam is not None and cam.type == 'CAMERA':
+        cam = start_camera(context.scene)
+        if cam is not None:
             row = layout.row()
             row.prop(cam.data, "lens", text="Lens (mm)")
-            layout.operator("vcs.select", text=f"Select {START_NAME}", icon='RESTRICT_SELECT_OFF').name = cam.name
+            layout.operator("vcs.select", text=f"Select {cam.name}", icon='RESTRICT_SELECT_OFF').name = cam.name
         else:
             layout.label(text="No start: the game will guess one")
 

@@ -5,6 +5,7 @@ with a gobo), a speaker and an ambience bed, save a .vcscene, unzip it and check
 (positions round-trip through matrix_world; up and metresPerUnit right). Also saves once
 without Splat Patch (the source-copy fallback). Exits 1 on any failure."""
 import json
+import re
 import math
 import os
 import struct
@@ -12,6 +13,7 @@ import sys
 import tempfile
 import wave
 import zipfile
+from types import SimpleNamespace
 
 import bpy
 from mathutils import Euler, Matrix, Vector
@@ -25,7 +27,7 @@ if os.path.isdir(GS_PATCH):
     gs_patch.register()
 import vc_scene_builder
 vc_scene_builder.register()
-from vc_scene_builder import bundle, fog, ops, props
+from vc_scene_builder import bundle, fog, opener, ops, props
 
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 SCANS = argv or ["/Users/timothyfennell/Downloads/Big Bee/scene.ply"]
@@ -64,6 +66,29 @@ make_wav(D + "wind.wav", 220)
 os.makedirs(D + "other", exist_ok=True)
 make_wav(D + "other/wind.wav", 110)            # same name, different file
 make_hdr(D + "forest.hdr")
+
+
+def differences(a, b, path="", tol=2e-4, strip_names=False):
+    """Where two scene.json values differ (numbers within tol)."""
+    if isinstance(a, dict) and isinstance(b, dict):
+        out = []
+        for k in sorted(set(a) | set(b)):
+            if strip_names and k == "name" and path:
+                continue
+            if k not in a or k not in b:
+                out.append(f"{path}.{k} only in {'first' if k in a else 'second'}")
+            else:
+                out += differences(a[k], b[k], f"{path}.{k}", tol, strip_names)
+        return out
+    if isinstance(a, list) and isinstance(b, list):
+        if len(a) != len(b):
+            return [f"{path}: {len(a)} vs {len(b)} items"]
+        return [d for i, (x, y) in enumerate(zip(a, b)) for d in differences(x, y, f"{path}[{i}]", tol, strip_names)]
+    if isinstance(a, str) and isinstance(b, str) and (path.endswith(".name") or path.endswith("scanName")):
+        return [] if re.sub(r"\.\d{3}$", "", a) == re.sub(r"\.\d{3}$", "", b) else [f"{path}: {a!r} vs {b!r}"]
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)) and not isinstance(a, bool):
+        return [] if abs(a - b) <= tol * max(1, abs(a)) else [f"{path}: {a} vs {b}"]
+    return [] if a == b else [f"{path}: {a!r} vs {b!r}"]
 
 
 def ply_count(data):
@@ -161,7 +186,7 @@ def build_and_check(scan_path, tag):
     vc.fog_variation = 0.5
     vc.fog_variation_size = 12
     vc.fog_variation_seed = 3
-    amb = bpy.data.objects.get(fog.AMBIENT_NAME)
+    amb = fog.ambient_object(scene)
     check(f"[{tag}] ambient fog previews in a box round the scan", amb is not None and amb.active_material is not None
           and any(n.type == 'TEX_NOISE' for n in amb.active_material.node_tree.nodes))
     mist = ops.add_fog_patch(ctx, 'BOX', location=(1.5, -0.5, 0.2))
@@ -274,6 +299,61 @@ def build_and_check(scan_path, tag):
                                                   {"file": "sounds/wind_2.wav", "volume": 0.2}], str(s["ambience"]))
     check(f"[{tag}] packed sound is the right file", z.read("sounds/wind_2.wav") == open(D + "other/wind.wav", "rb").read())
 
+    # Open it again (as File > Import does), save that, and compare.
+    with zipfile.ZipFile(out, "a") as zz:
+        zz.writestr("license.txt", "credit the scan's author")
+    opened, notes = opener.open_bundle(ctx, out)
+    check(f"[{tag}] opens with no notes", not notes, str(notes))
+    octx = SimpleNamespace(scene=opened)
+    again = D + f"again_{tag}.vcscene"
+    real_sp = bundle.splat_patch
+    bundle.splat_patch = lambda: None           # the reopened scan: copy its unpacked ply
+    try:
+        j2, _ = bundle.save(octx, opened.vc.scan, again)
+    finally:
+        bundle.splat_patch = real_sp
+    za = zipfile.ZipFile(again)
+    s_again = json.loads(za.read("scene.json"))
+    diffs = differences(s, s_again)
+    check(f"[{tag}] open + save gives the same scene.json", not diffs, "; ".join(diffs[:6]))
+    check(f"[{tag}] extra files are carried over", za.read("license.txt") == b"credit the scan's author"
+          and set(za.namelist()) == want | {"license.txt"}, str(sorted(za.namelist())))
+    check(f"[{tag}] opened lights keep their names and settings",
+          {re.sub(r"\.\d{3}$", "", o.name): o.data.vc.modifier for o in bundle.vc_lights(opened)}
+          == {key.name: "Barn doors, a slash", gobo.name: "Gobo: window"})
+    check(f"[{tag}] opened scene's fog preview is its own",
+          fog.ambient_object(opened) is not None and fog.ambient_object(opened) != fog.ambient_object(scene))
+    # A bundle with no "blender" block (made elsewhere): stood up from `up`, scaled from metresPerUnit.
+    bare = D + f"bare_{tag}.vcscene"
+    with zipfile.ZipFile(out) as zin, zipfile.ZipFile(bare, "w") as zout:
+        for info in zin.infolist():
+            data = zin.read(info.filename)
+            if info.filename == "scene.json":
+                jj = json.loads(data); jj.pop("blender")
+                for sec in ("lights", "sounds", "bounds", "fogVolumes"):
+                    for item in jj[sec]:
+                        item.pop("name")
+                data = json.dumps(jj)
+            zout.writestr(info, data)
+    bs, bnotes = opener.open_bundle(ctx, bare)
+    bm = bs.vc.scan.matrix_world
+    check(f"[{tag}] a bare bundle stands up and keeps its scale",
+          close((bm.to_3x3() @ Vector(s["up"])).normalized(), (0, 0, 1)) and
+          abs(props.metres_per_unit(bs, bs.vc.scan) - s["metresPerUnit"]) < 1e-6)
+    s_bare = bundle.describe(SimpleNamespace(scene=bs), bs.vc.scan)[0]
+    for sec in ("lights", "sounds", "bounds", "fogVolumes"):
+        for item in s_bare[sec]:
+            item.pop("name")
+    # The fog's base is a plane across `up`: only its height along up has to match.
+    base_h = [Vector(x["fog"].pop("base")).dot(Vector(x["up"])) for x in (s_bare, dict(s, fog=dict(s["fog"])))]
+    check(f"[{tag}] a bare bundle keeps the fog's base height", abs(base_h[0] - base_h[1]) < 1e-4, str(base_h))
+    s_cmp = dict(s, fog={k: v for k, v in s["fog"].items() if k != "base"})
+    bare_diffs = differences({k: v for k, v in s_cmp.items() if k != "blender"},
+                             {k: v for k, v in s_bare.items() if k != "blender"}, strip_names=True)
+    check(f"[{tag}] a bare bundle reopens to the same scene", not bare_diffs, "; ".join(bare_diffs[:6]))
+    for sc in (opened, bs):
+        bpy.data.scenes.remove(sc)
+
     # Without Splat Patch: the scan's source .ply is copied in as it is.
     real = bundle.splat_patch
     bundle.splat_patch = lambda: None
@@ -314,7 +394,7 @@ def build_and_check(scan_path, tag):
     vc.fog = False
     s3 = bundle.describe(ctx, scan)[0]
     check(f"[{tag}] no fog key when ambient fog is off", "fog" not in s3 and
-          bpy.data.objects.get(fog.AMBIENT_NAME) is None and len(s3["fogVolumes"]) == 1)
+          fog.ambient_object(scene) is None and len(s3["fogVolumes"]) == 1)
     if tag == "0":
         print(json.dumps(s, indent=1)[:1500])
 

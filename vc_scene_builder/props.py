@@ -19,6 +19,15 @@ TUNGSTEN = tuple(c / max(_T) for c in _T)
 START_NAME = "VC Start"
 
 
+def start_camera(scene):
+    """The scene's start camera: tagged vc_start (any name), else one named VC Start."""
+    for o in scene.objects:
+        if o.type == 'CAMERA' and o.get("vc_start"):
+            return o
+    o = scene.objects.get(START_NAME)
+    return o if o is not None and o.type == 'CAMERA' else None
+
+
 def _items(names, about=""):
     return [(n, n, about, i) for i, n in enumerate(names)]
 
@@ -207,7 +216,7 @@ def sync_world(scene):
 
 
 def _sky_update(self, context):
-    sync_world(context.scene)
+    sync_world(self.id_data)            # the scene that owns the setting, not just the one showing
 
 
 class VCAmbience(bpy.types.PropertyGroup):
@@ -222,12 +231,13 @@ def _scan_poll(self, obj):
 # ---------------------------------------------------------------- fog
 def _patch_update(self, context):
     from . import fog
-    fog.update_patch(self.id_data, context.scene)
+    obj = self.id_data
+    fog.update_patch(obj, obj.users_scene[0] if obj.users_scene else context.scene)
 
 
 def _ambient_update(self, context):
     from . import fog
-    fog.update_ambient(context.scene)
+    fog.update_ambient(self.id_data)
 
 
 def _variation_props(update, size_default):
@@ -275,6 +285,9 @@ class VCSceneSettings(bpy.types.PropertyGroup):
     scene_name: bpy.props.StringProperty(name="Name", description="Shown as the game's window title (blank: the Blender scene's name)")
     scan: bpy.props.PointerProperty(name="Scan", type=bpy.types.Object, poll=_scan_poll,
                                     description="The splat object (blank: the active splat object)")
+    opened_from: bpy.props.StringProperty(
+        name="Opened From", subtype='DIR_PATH', options={'HIDDEN'},
+        description="Where an opened .vcscene was unpacked (its other files are saved again with it)")
     source_ply: bpy.props.StringProperty(
         name="Source PLY", subtype='FILE_PATH',
         description="The scan's .ply, copied in as-is when Splat Patch isn't enabled to write it")

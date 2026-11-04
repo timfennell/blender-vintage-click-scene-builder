@@ -14,7 +14,7 @@ import zipfile
 import bpy
 from mathutils import Matrix, Vector
 
-from .props import KIT, START_NAME, metres_per_unit
+from .props import KIT, metres_per_unit, start_camera
 
 FORMAT = "vintage-click-scene"
 VERSION = 1
@@ -145,8 +145,8 @@ def describe(context, scan):
          "ev": _number(float(vc.ev)),
          "up": _vec(up)}
 
-    cam = scene.objects.get(START_NAME)
-    if cam is not None and cam.type == 'CAMERA':
+    cam = start_camera(scene)
+    if cam is not None:
         mw = cam.matrix_world
         fwd = mw.to_3x3() @ Vector((0, 0, -1))
         lens = cam.data.lens * 36.0 / cam.data.sensor_width     # as on 35 mm film
@@ -165,7 +165,7 @@ def describe(context, scan):
         s = o.data.vc
         mw = o.matrix_world
         aim = mw.to_3x3() @ Vector((0, 0, -1))
-        lights.append({"head": s.head, "position": _vec(sp.point(mw.translation)),
+        lights.append({"name": o.name, "head": s.head, "position": _vec(sp.point(mw.translation)),
                        "aim": _vec(sp.direction(aim)), "spot": round(s.spot, 4),
                        "dimmerStops": round(s.dimmer_stops, 4), "gel": s.gel, "modifier": s.modifier,
                        "patternFocus": round(s.pattern_focus, 4), "flare": bool(s.flare),
@@ -181,7 +181,7 @@ def describe(context, scan):
         arc = add_file("sounds", snd.filepath, f"Speaker {o.name}")
         if not arc:
             continue
-        sounds.append({"file": arc, "position": _vec(sp.point(o.matrix_world.translation)),
+        sounds.append({"name": o.name, "file": arc, "position": _vec(sp.point(o.matrix_world.translation)),
                        "volume": round(o.data.volume, 4),
                        "fullWithinM": round(o.data.distance_reference * scale, 4),
                        "silentBeyondM": round(o.data.distance_max * scale, 4)})
@@ -199,7 +199,7 @@ def describe(context, scan):
     out = []
     for o in sorted(bounds(scene), key=lambda o: o.name):
         m = sp.inv @ o.matrix_world @ Matrix.Scale(bound_unit(o), 4)
-        out.append({"shape": BOUND_SHAPES[o["vc_bound"]],
+        out.append({"name": o.name, "shape": BOUND_SHAPES[o["vc_bound"]],
                     "matrix": [round(m[r][c], 7) + 0.0 for r in range(4) for c in range(4)]})
     j["bounds"] = out
 
@@ -215,7 +215,7 @@ def describe(context, scan):
     for o in sorted(fog_patches(scene), key=lambda o: o.name):
         m = sp.inv @ o.matrix_world
         f = o.vc_fog
-        vols.append({"shape": FOG_SHAPES[o["vc_fog"]],
+        vols.append({"name": o.name, "shape": FOG_SHAPES[o["vc_fog"]],
                      "matrix": [round(m[r][c], 7) + 0.0 for r in range(4) for c in range(4)],
                      "visibilityM": round(f.visibility, 4), "colour": _vec(f.colour, 4),
                      "softness": round(f.softness, 4), "heightFalloffM": round(f.height_falloff, 4),
@@ -223,6 +223,10 @@ def describe(context, scan):
                      "variation": _variation(f.variation, f.variation_size, f.variation_detail,
                                              f.variation_seed)})
     j["fogVolumes"] = vols
+    # For reopening in Blender exactly as it was (the game ignores it).
+    mw = scan.matrix_world
+    j["blender"] = {"scanMatrixWorld": [round(mw[r][c], 9) + 0.0 for r in range(4) for c in range(4)],
+                    "unitScale": scale, "scanName": scan.name}
     return j, files, problems
 
 
@@ -241,6 +245,23 @@ def write_ply(context, scan, path):
     return "source copy"
 
 
+def extras(scene):
+    """Files that came in an opened bundle and that this add-on doesn't make (a licence, notes),
+    to carry over when it is saved again: [(archive name, path)]."""
+    root = bpy.path.abspath(scene.vc.opened_from) if scene.vc.opened_from else ""
+    if not root or not os.path.isdir(root):
+        return []
+    out = []
+    for dirpath, _, names in os.walk(root):
+        for n in names:
+            path = os.path.join(dirpath, n)
+            arc = os.path.relpath(path, root).replace(os.sep, "/")
+            if arc in ("scene.json", "scene.ply") or arc.startswith(("sky/", "sounds/")) or n.startswith("."):
+                continue
+            out.append((arc, path))
+    return out
+
+
 def save(context, scan, filepath):
     """Write the bundle. Returns (scene.json dict, problems). Raises BundleError."""
     import json
@@ -255,6 +276,10 @@ def save(context, scan, filepath):
         with zipfile.ZipFile(part, "w", zipfile.ZIP_DEFLATED) as z:
             z.writestr("scene.json", json.dumps(j, indent=2))
             z.write(ply, "scene.ply", compress_type=zipfile.ZIP_STORED)
+            known = {"scene.json", "scene.ply"} | {arc for arc, _ in files}
+            for arc, src in extras(context.scene):
+                if arc not in known:
+                    z.write(src, arc)
             for arc, src in files:
                 z.write(src, arc, compress_type=zipfile.ZIP_STORED if arc.startswith("sounds/")
                         else zipfile.ZIP_DEFLATED)

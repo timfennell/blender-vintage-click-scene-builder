@@ -1,23 +1,26 @@
+import json
 import os
+import zipfile
 
 import bpy
 from bpy_extras.io_utils import ExportHelper, ImportHelper
 from mathutils import Matrix
 
 from . import bundle, fog
-from .props import HEAD_ITEMS, HEADS, START_NAME, pin_scan, preview, scan_of
+from .props import HEAD_ITEMS, HEADS, START_NAME, pin_scan, preview, scan_of, start_camera
 
 
 def place_start(context, matrix):
     """Create or move the "VC Start" camera to a world matrix (camera looks down its -Z)."""
     pin_scan(context)
     scene = context.scene
-    cam = scene.objects.get(START_NAME)
-    if cam is None or cam.type != 'CAMERA':
+    cam = start_camera(scene)
+    if cam is None:
         data = bpy.data.cameras.new(START_NAME)
         data.sensor_width = 36.0
         data.lens = 35.0
         cam = bpy.data.objects.new(START_NAME, data)
+        cam["vc_start"] = True
         scene.collection.objects.link(cam)
     cam.matrix_world = Matrix(matrix)
     return cam
@@ -137,7 +140,7 @@ class VCS_OT_set_start(bpy.types.Operator):
         if rv3d.view_perspective != 'CAMERA':
             # The viewport's lens is drawn on a 72 mm-wide sensor; give the camera the same view.
             cam.data.lens = context.space_data.lens * cam.data.sensor_width / 72.0
-        self.report({'INFO'}, f"{START_NAME} set ({cam.data.lens:.0f} mm)")
+        self.report({'INFO'}, f"{cam.name} set ({cam.data.lens:.0f} mm)")
         return {'FINISHED'}
 
 
@@ -293,21 +296,51 @@ class VCS_OT_save(bpy.types.Operator, ExportHelper):
         return {'FINISHED'}
 
 
+class VCS_OT_open_scene(bpy.types.Operator, ImportHelper):
+    """Open a .vcscene to edit it: its scan, start, sky, lights, sounds, bounds and fog come
+    back in a new scene, ready to save again"""
+    bl_idname = "vcs.open_scene"
+    bl_label = "Open .vcscene"
+    bl_options = {'REGISTER', 'UNDO'}
+    filename_ext = ".vcscene"
+    filter_glob: bpy.props.StringProperty(default="*.vcscene", options={'HIDDEN'})
+
+    def execute(self, context):
+        from . import opener
+        try:
+            scene, notes = opener.open_bundle(context, self.filepath)
+        except (opener.OpenError, zipfile.BadZipFile, json.JSONDecodeError, KeyError) as e:
+            self.report({'ERROR'}, f"Can't open {os.path.basename(self.filepath)}: {e}")
+            return {'CANCELLED'}
+        if context.window is not None:
+            context.window.scene = scene
+        for n in notes:
+            self.report({'WARNING'}, n)
+        self.report({'INFO'}, f"Opened {scene.name}" + (f" ({len(notes)} notes)" if notes else ""))
+        return {'FINISHED'}
+
+
+def menu_import(self, context):
+    self.layout.operator(VCS_OT_open_scene.bl_idname, text="Vintage Click Scene (.vcscene)")
+
+
 def menu_export(self, context):
     self.layout.operator(VCS_OT_save.bl_idname, text="Vintage Click Scene (.vcscene)")
 
 
 CLASSES = (VCS_OT_set_start, VCS_OT_add_light, VCS_OT_add_bound, VCS_OT_add_fog_patch, VCS_OT_select, VCS_OT_add_sound,
-           VCS_OT_ambience_add, VCS_OT_ambience_remove, VCS_OT_save)
+           VCS_OT_ambience_add, VCS_OT_ambience_remove, VCS_OT_save, VCS_OT_open_scene)
 
 
 def register():
     for c in CLASSES:
         bpy.utils.register_class(c)
     bpy.types.TOPBAR_MT_file_export.append(menu_export)
+    bpy.types.TOPBAR_MT_file_import.append(menu_import)
 
 
 def unregister():
+    bpy.types.TOPBAR_MT_file_import.remove(menu_import)
     bpy.types.TOPBAR_MT_file_export.remove(menu_export)
     for c in reversed(CLASSES):
         bpy.utils.unregister_class(c)

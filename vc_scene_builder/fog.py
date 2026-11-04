@@ -194,7 +194,7 @@ def update_ambient(scene):
     preview needs a volume to live in). Removed when ambient fog is off."""
     from .props import scan_of_scene
     vc = scene.vc
-    obj = bpy.data.objects.get(AMBIENT_NAME)
+    obj = ambient_object(scene)
     scan = scan_of_scene(scene)
     if not vc.fog or scan is None:
         if obj is not None:
@@ -206,6 +206,7 @@ def update_ambient(scene):
     if obj is None:
         from .ops import _unit_mesh
         obj = bpy.data.objects.new(AMBIENT_NAME, _unit_mesh('BOX', AMBIENT_NAME))
+        obj["vc_ambient"] = True
         obj.display_type = 'BOUNDS'
         obj.hide_select = True
         scene.collection.objects.link(obj)
@@ -216,6 +217,11 @@ def update_ambient(scene):
           amount=vc.fog_variation, size_m=vc.fog_variation_size, detail=vc.fog_variation_detail,
           seed=vc.fog_variation_seed)
     setup_render(scene)
+
+
+def ambient_object(scene):
+    """This scene's ambient fog preview box, if it has one."""
+    return next((o for o in scene.objects if o.get("vc_ambient")), None)
 
 
 def _fit_ambient(obj, scan, base_z):
@@ -243,7 +249,7 @@ def on_depsgraph(scene, depsgraph):
         if obj.get("vc_fog") in ('BOX', 'SPHERE', 'CYLINDER'):
             _set_base(obj, lowest(obj, obj["vc_fog"]))
         elif scan is not None and obj == scan and scene.vc.fog:
-            amb = bpy.data.objects.get(AMBIENT_NAME)
+            amb = ambient_object(scene)
             if amb is not None:
                 _fit_ambient(amb, scan, scene.vc.fog_base)
 

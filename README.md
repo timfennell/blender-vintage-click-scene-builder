@@ -8,8 +8,11 @@ saves it as one self-contained `.vcscene` file the game opens.
 - **Scene**: the scan (blank = the active splat object, or the scene's only one; it is pinned
   the first time you add a start, light or sound), the metres per PLY unit (the scan's world
   scale × the scene's unit scale; scale the scan until the Measure tool reads true), place or
-  object, and the light the scan was captured in (EV). **Save .vcscene…** is here and in
-  File › Export.
+  object, and the light the scan was captured in (EV). **Open…** (also File › Import)
+  brings a `.vcscene` back into a new scene to edit; **Save .vcscene…** (also File › Export)
+  writes it. An opened bundle is unpacked to a lasting cache folder (a saved .blend refers to
+  it) and any other files in it, such as a licence, are saved again with it. Bundles from
+  this add-on reopen exactly; others are stood up from `up` and scaled from `metresPerUnit`.
 - **Start**: *Set Start From View* creates or moves the camera **VC Start** to the viewport
   view. Its lens (on a 36 mm-wide sensor) is the start focal length. Look through it as any
   camera.
@@ -55,6 +58,17 @@ section of the plan for every key.
 The heads, gels, modifiers, house levels, scene-light choices and the tungsten colour,
 exported by the game: `VintageClick --export-kit kit.json`. Re-export it whenever the
 game's kit changes; the add-on stores everything by name.
+
+## Example
+
+`examples/timberjack_fog.py` builds *Timberjack in the Mist*: a forest clearing at dusk
+with haze, ground mist, three lamps (a branch cookie, a leaf gobo, a cab work light), a
+bound round the clearing, wind in the trees and the machine idling (synthesized
+placeholder loops from `examples/make_sounds.py`).
+
+```bash
+/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python examples/timberjack_fog.py -- SCAN.ply OUT_DIR
+```
 
 ## Test
 
