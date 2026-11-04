@@ -5,7 +5,7 @@ from bpy_extras.io_utils import ExportHelper, ImportHelper
 from mathutils import Matrix
 
 from . import bundle
-from .props import HEAD_ITEMS, HEADS, START_NAME, pin_scan, preview, scan_of
+from .props import HEAD_ITEMS, HEADS, START_NAME, fog_preview, pin_scan, preview, scan_of
 
 
 def place_start(context, matrix):
@@ -72,6 +72,51 @@ def add_bound(context, shape, location=None):
     return obj
 
 
+FOG_ITEMS = [('BOX', "Box", "A box of fog (flatten it over a pond)"),
+             ('SPHERE', "Sphere", "A ball of fog"),
+             ('CYLINDER', "Cylinder", "An upright cylinder of fog")]
+
+
+def _unit_mesh(shape, name):
+    """Cube ±1, UV sphere radius 1, or cylinder radius 1 from z -1 to 1: the unit primitives."""
+    import bmesh
+    bm = bmesh.new()
+    if shape == 'BOX':
+        bmesh.ops.create_cube(bm, size=2)
+    elif shape == 'SPHERE':
+        bmesh.ops.create_uvsphere(bm, u_segments=32, v_segments=16, radius=1)
+    else:
+        bmesh.ops.create_cone(bm, cap_ends=True, segments=32, radius1=1, radius2=1, depth=2)
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    return me
+
+
+def add_fog_patch(context, shape, location=None):
+    """A local fog volume: a unit mesh primitive with a Principled Volume to preview it."""
+    pin_scan(context)
+    name = "VC Fog " + shape.title()
+    obj = bpy.data.objects.new(name, _unit_mesh(shape, name))
+    obj["vc_fog"] = shape
+    obj.display_type = 'WIRE'               # wire in the solid viewport; the volume renders
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    nt = mat.node_tree
+    for n in list(nt.nodes):
+        if n.type != 'OUTPUT_MATERIAL':
+            nt.nodes.remove(n)
+    out = next(n for n in nt.nodes if n.type == 'OUTPUT_MATERIAL')
+    vol = nt.nodes.new("ShaderNodeVolumePrincipled")
+    vol.location = out.location.x - 300, out.location.y
+    nt.links.new(vol.outputs[0], out.inputs["Volume"])
+    obj.data.materials.append(mat)
+    context.collection.objects.link(obj)
+    obj.location = location if location is not None else context.scene.cursor.location
+    fog_preview(obj, context.scene)
+    return obj
+
+
 def add_speaker(context, filepath, location=None):
     pin_scan(context)
     data = bpy.data.speakers.new(os.path.splitext(os.path.basename(filepath))[0] or "Sound")
@@ -133,6 +178,23 @@ class VCS_OT_add_bound(bpy.types.Operator):
 
     def execute(self, context):
         obj = add_bound(context, self.shape)
+        for o in context.selected_objects:
+            o.select_set(False)
+        obj.select_set(True)
+        context.view_layer.objects.active = obj
+        return {'FINISHED'}
+
+
+class VCS_OT_add_fog_patch(bpy.types.Operator):
+    """Add a patch of fog at the 3D cursor (mist over a pond, a fog bank)"""
+    bl_idname = "vcs.add_fog_patch"
+    bl_label = "Add Fog Patch"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    shape: bpy.props.EnumProperty(name="Shape", items=FOG_ITEMS)
+
+    def execute(self, context):
+        obj = add_fog_patch(context, self.shape)
         for o in context.selected_objects:
             o.select_set(False)
         obj.select_set(True)
@@ -236,7 +298,7 @@ class VCS_OT_save(bpy.types.Operator, ExportHelper):
             self.report({'WARNING'}, p)
         self.report({'INFO'}, f"Saved {os.path.basename(self.filepath)}: {len(j['lights'])} lights, "
                               f"{len(j['sounds'])} sounds, {len(j['ambience'])} ambience"
-                              + f", {len(j['bounds'])} bounds"
+                              + f", {len(j['bounds'])} bounds, {len(j['fogVolumes'])} fog patches"
                               + (f" ({len(problems)} missing)" if problems else ""))
         return {'FINISHED'}
 
@@ -245,7 +307,7 @@ def menu_export(self, context):
     self.layout.operator(VCS_OT_save.bl_idname, text="Vintage Click Scene (.vcscene)")
 
 
-CLASSES = (VCS_OT_set_start, VCS_OT_add_light, VCS_OT_add_bound, VCS_OT_select, VCS_OT_add_sound,
+CLASSES = (VCS_OT_set_start, VCS_OT_add_light, VCS_OT_add_bound, VCS_OT_add_fog_patch, VCS_OT_select, VCS_OT_add_sound,
            VCS_OT_ambience_add, VCS_OT_ambience_remove, VCS_OT_save)
 
 

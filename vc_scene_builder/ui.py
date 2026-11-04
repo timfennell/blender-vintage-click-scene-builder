@@ -108,6 +108,33 @@ class VCS_UL_ambience(bpy.types.UIList):
         row.prop(item, "volume", text="")
 
 
+class VCS_PT_fog(_Panel, bpy.types.Panel):
+    bl_label = "Fog"
+
+    def draw(self, context):
+        layout = self.layout
+        vc = context.scene.vc
+        layout.prop(vc, "fog")
+        col = layout.column()
+        col.active = vc.fog
+        col.prop(vc, "fog_visibility", text="Visibility (m)")
+        col.prop(vc, "fog_colour")
+        col.prop(vc, "fog_falloff", text="Height Fall-off (m)")
+        col.prop(vc, "fog_base")
+        layout.separator()
+        layout.operator_menu_enum("vcs.add_fog_patch", "shape", text="Add Fog Patch", icon='OUTLINER_DATA_VOLUME')
+        active = context.active_object
+        for o in bundle.fog_patches(context.scene):
+            layout.operator("vcs.select", text=o.name, depress=(o == active),
+                            icon='OUTLINER_OB_VOLUME').name = o.name
+        if active is not None and active.get("vc_fog") in bundle.FOG_SHAPES:
+            col = layout.column()
+            col.label(text=active.name, icon='OUTLINER_OB_VOLUME')
+            col.prop(active.vc_fog, "visibility", text="Visibility (m)")
+            col.prop(active.vc_fog, "colour")
+            col.prop(active.vc_fog, "softness")
+
+
 class VCS_PT_bounds(_Panel, bpy.types.Panel):
     bl_label = "Bounds"
 
@@ -153,7 +180,7 @@ class VCS_PT_sounds(_Panel, bpy.types.Panel):
         col.operator("vcs.ambience_remove", text="", icon='REMOVE')
 
 
-CLASSES = (VCS_PT_scene, VCS_PT_start, VCS_PT_sky, VCS_PT_house, VCS_PT_lights, VCS_PT_bounds, VCS_UL_ambience, VCS_PT_sounds)
+CLASSES = (VCS_PT_scene, VCS_PT_start, VCS_PT_sky, VCS_PT_house, VCS_PT_lights, VCS_PT_fog, VCS_PT_bounds, VCS_UL_ambience, VCS_PT_sounds)
 
 
 def register():

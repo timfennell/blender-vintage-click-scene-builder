@@ -228,9 +228,56 @@ class VCSceneSettings(bpy.types.PropertyGroup):
     house_lights: bpy.props.EnumProperty(name="House Lights", items=HOUSE_ITEMS)
     ambience: bpy.props.CollectionProperty(type=VCAmbience)
     ambience_index: bpy.props.IntProperty()
+    fog: bpy.props.BoolProperty(name="Ambient Fog", description="Fog through the whole scene, lit by the scene's own light")
+    fog_visibility: bpy.props.FloatProperty(name="Visibility", min=1, soft_max=20000, default=300,
+                                            description="How far you can see through it (metres)")
+    fog_colour: bpy.props.FloatVectorProperty(name="Colour", subtype='COLOR', size=3, min=0, max=1,
+                                              default=(1, 1, 1))
+    fog_falloff: bpy.props.FloatProperty(name="Height Fall-off", min=0, soft_max=200, default=8,
+                                         description="The fog halves about every this many metres above its base (0: even everywhere)")
+    fog_base: bpy.props.FloatProperty(name="Base Height", default=0, unit='LENGTH',
+                                      description="World Z of the ground: below it the fog stays at full density")
 
 
-CLASSES = (VCLightSettings, VCAmbience, VCSceneSettings)
+# ---------------------------------------------------------------- fog
+# Meteorological visibility: where contrast falls to 2% through fog of extinction sigma,
+# V = ln(50) / sigma (3.912 / sigma).
+VISIBILITY_K = 3.912
+
+
+def fog_density(visibility_m, scene):
+    """Principled Volume density (per Blender unit) for a visibility in metres."""
+    return VISIBILITY_K / max(visibility_m, 1e-3) * scene.unit_settings.scale_length
+
+
+def fog_preview(obj, scene):
+    """Keep a fog patch's volume material showing its visibility and colour."""
+    f = obj.vc_fog
+    mat = obj.active_material
+    if mat is None or not mat.use_nodes:
+        return
+    vol = next((n for n in mat.node_tree.nodes if n.type == 'PRINCIPLED_VOLUME'), None)
+    if vol is None:
+        return
+    vol.inputs["Density"].default_value = fog_density(f.visibility, scene)
+    vol.inputs["Color"].default_value = (*f.colour, 1.0)
+
+
+def _fog_update(self, context):
+    fog_preview(self.id_data, context.scene)
+
+
+class VCFogPatch(bpy.types.PropertyGroup):
+    visibility: bpy.props.FloatProperty(name="Visibility", min=0.05, soft_max=1000, default=5, unit='LENGTH',
+                                        description="How far you can see through it (metres)",
+                                        update=_fog_update)
+    colour: bpy.props.FloatVectorProperty(name="Colour", subtype='COLOR', size=3, min=0, max=1,
+                                          default=(1, 1, 1), update=_fog_update)
+    softness: bpy.props.FloatProperty(name="Softness", min=0, max=1, default=0.4, subtype='FACTOR',
+                                      description="Share of the radius over which the edge fades out")
+
+
+CLASSES = (VCLightSettings, VCAmbience, VCFogPatch, VCSceneSettings)
 
 
 def register():
@@ -238,9 +285,11 @@ def register():
         bpy.utils.register_class(c)
     bpy.types.Scene.vc = bpy.props.PointerProperty(type=VCSceneSettings)
     bpy.types.Light.vc = bpy.props.PointerProperty(type=VCLightSettings)
+    bpy.types.Object.vc_fog = bpy.props.PointerProperty(type=VCFogPatch)
 
 
 def unregister():
+    del bpy.types.Object.vc_fog
     del bpy.types.Light.vc
     del bpy.types.Scene.vc
     for c in reversed(CLASSES):

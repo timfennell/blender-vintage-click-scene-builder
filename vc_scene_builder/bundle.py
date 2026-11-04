@@ -77,6 +77,14 @@ def bound_unit(obj):
     return obj.empty_display_size if obj.type == 'EMPTY' else 1.0
 
 
+FOG_SHAPES = BOUND_SHAPES
+
+
+def fog_patches(scene):
+    """Mesh primitives tagged vc_fog = 'BOX' | 'SPHERE' | 'CYLINDER', built at unit size."""
+    return [o for o in scene.objects if o.get("vc_fog") in FOG_SHAPES]
+
+
 def speakers(scene):
     return [o for o in scene.objects if o.type == 'SPEAKER']
 
@@ -189,6 +197,21 @@ def describe(context, scan):
         out.append({"shape": BOUND_SHAPES[o["vc_bound"]],
                     "matrix": [round(m[r][c], 7) + 0.0 for r in range(4) for c in range(4)]})
     j["bounds"] = out
+
+    vc = scene.vc
+    if vc.fog:
+        j["fog"] = {"visibilityM": round(vc.fog_visibility, 4), "colour": _vec(vc.fog_colour, 4),
+                    "heightFalloffM": round(vc.fog_falloff, 4),
+                    "base": _vec(sp.point((0, 0, vc.fog_base)))}
+    vols = []
+    for o in sorted(fog_patches(scene), key=lambda o: o.name):
+        m = sp.inv @ o.matrix_world
+        f = o.vc_fog
+        vols.append({"shape": FOG_SHAPES[o["vc_fog"]],
+                     "matrix": [round(m[r][c], 7) + 0.0 for r in range(4) for c in range(4)],
+                     "visibilityM": round(f.visibility, 4), "colour": _vec(f.colour, 4),
+                     "softness": round(f.softness, 4)})
+    j["fogVolumes"] = vols
     return j, files, problems
 
 

@@ -152,6 +152,24 @@ def build_and_check(scan_path, tag):
     ball.scale = (2, 2, 2)
     ball.empty_display_size = 0.75
 
+    vc.fog = True
+    vc.fog_visibility = 300
+    vc.fog_colour = (0.9, 0.95, 1.0)
+    vc.fog_falloff = 8
+    vc.fog_base = 0.4
+    mist = ops.add_fog_patch(ctx, 'BOX', location=(1.5, -0.5, 0.2))
+    mist.rotation_euler = Euler((0, 0, math.radians(-20)))
+    mist.scale = (3, 2, 0.3)                    # a flat slab over a pond
+    mist.vc_fog.visibility = 4
+    mist.vc_fog.colour = (0.8, 0.85, 0.9)
+    mist.vc_fog.softness = 0.5
+    zs = [v.co.z for v in mist.data.vertices]
+    check(f"[{tag}] fog patch mesh is the unit box", abs(min(zs) + 1) < 1e-6 and abs(max(zs) - 1) < 1e-6)
+    vnode = next(n for n in mist.active_material.node_tree.nodes if n.type == 'PRINCIPLED_VOLUME')
+    check(f"[{tag}] fog patch previews its density and colour",
+          abs(vnode.inputs["Density"].default_value - 3.912 / 4) < 1e-5 and
+          abs(vnode.inputs["Color"].default_value[0] - 0.8) < 1e-6 and mist.display_type == 'WIRE')
+
     spk = ops.add_speaker(ctx, D + "stream.wav", location=(-2, -1, 0.3))
     spk.data.volume = 0.7
     spk.data.distance_reference = 3
@@ -212,6 +230,17 @@ def build_and_check(scan_path, tag):
         sz = obj.empty_display_size
         check(f"[{tag}] {shape} unit corner is the drawn corner",
               close(M @ (m @ Vector((1, 1, 1))), obj.matrix_world @ Vector((sz, sz, sz))))
+    fg = s["fog"]
+    check(f"[{tag}] ambient fog", fg["visibilityM"] == 300 and fg["heightFalloffM"] == 8 and
+          close(fg["colour"], (0.9, 0.95, 1.0)), str(fg))
+    check(f"[{tag}] fog base round-trips", close(M @ Vector(fg["base"]), (0, 0, 0.4)))
+    fv = s["fogVolumes"]
+    check(f"[{tag}] one fog patch", len(fv) == 1 and fv[0]["shape"] == "box" and fv[0]["visibilityM"] == 4
+          and fv[0]["softness"] == 0.5 and close(fv[0]["colour"], (0.8, 0.85, 0.9)), str(fv))
+    m = Matrix([fv[0]["matrix"][r * 4:r * 4 + 4] for r in range(4)])
+    check(f"[{tag}] fog patch centre round-trips", close(M @ m.translation, mist.matrix_world.translation))
+    check(f"[{tag}] fog patch unit corner is its mesh corner",
+          close(M @ (m @ Vector((1, 1, 1))), mist.matrix_world @ Vector((1, 1, 1))))
     snd = s["sounds"]
     check(f"[{tag}] speaker", len(snd) == 1 and snd[0]["file"] == "sounds/stream.wav" and
           abs(snd[0]["volume"] - 0.7) < 1e-6 and snd[0]["fullWithinM"] == 3 and snd[0]["silentBeyondM"] == 25 and
@@ -252,6 +281,14 @@ def build_and_check(scan_path, tag):
           [b["shape"] for b in s2["bounds"]] == ["box", "cylinder", "sphere"])
     bpy.data.objects.remove(added)
     bpy.data.objects.remove(cyl)
+    r = bpy.ops.vcs.add_fog_patch(shape='SPHERE')
+    ball_fog = ctx.view_layer.objects.active
+    check(f"[{tag}] Add Fog Patch operator", r == {'FINISHED'} and ball_fog["vc_fog"] == 'SPHERE'
+          and abs(max(v.co.length for v in ball_fog.data.vertices) - 1) < 1e-5)
+    bpy.data.objects.remove(ball_fog)
+    vc.fog = False
+    s3 = bundle.describe(ctx, scan)[0]
+    check(f"[{tag}] no fog key when ambient fog is off", "fog" not in s3)
     if tag == "0":
         print(json.dumps(s, indent=1)[:1500])
 

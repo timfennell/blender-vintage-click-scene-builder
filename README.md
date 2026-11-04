@@ -21,6 +21,11 @@ saves it as one self-contained `.vcscene` file the game opens.
   spot/flood, dimmer, gel, modifier (only those that fit the head: gobos for the ellipsoidal,
   doors, flags and cookies for the others), pattern focus and flare are saved by name; the
   Blender light previews the beam angle, tungsten × gel colour and the energy.
+- **Fog**: ambient fog through the whole scene (visibility in metres, colour, a height
+  fall-off that halves it about every so many metres above a base height, full below it),
+  lit by the scene's own light. *Add Fog Patch* (box, sphere, cylinder) adds a unit mesh
+  with a Principled Volume previewing its visibility and colour, plus an edge softness; a
+  flattened box over a pond makes mist. Patches show as wire in the solid viewport.
 - **Bounds**: *Add Bound Box / Sphere / Cylinder* add a movement bound (an empty drawn as a
   cube or sphere; a wireframe unit cylinder along its local Z). Move, rotate and scale them
   freely, unevenly too. The camera may go anywhere inside their union; no bounds, no limit.
@@ -36,7 +41,8 @@ A zip: `scene.json`, `scene.ply` (stored), `sky/…`, `sounds/…`. All position
 directions are in the PLY's own coordinates (`scan.matrix_world.inverted()`); `up` is
 Blender's +Z in those coordinates. Distances for sounds are in metres. Each bound is
 `{"shape": "box"|"sphere"|"cylinder", "matrix": [16, row-major]}`, mapping the unit
-primitive (box |x|,|y|,|z| ≤ 1; sphere r ≤ 1; cylinder x²+y² ≤ 1, |z| ≤ 1) into PLY space. See the format
+primitive (box |x|,|y|,|z| ≤ 1; sphere r ≤ 1; cylinder x²+y² ≤ 1, |z| ≤ 1) into PLY space. `fog.base` is world (0, 0, base height) in PLY space; `fogVolumes` use the
+same unit shapes and matrices as bounds. See the format
 section of the plan for every key.
 
 ## kit.json
