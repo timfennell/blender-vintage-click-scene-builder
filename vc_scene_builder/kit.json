@@ -1,0 +1,393 @@
+{
+ "heads": [
+  {
+   "name": "Fresnel 650",
+   "kind": "fresnel",
+   "lumens": 4800,
+   "spotAngle": 14,
+   "floodAngle": 52,
+   "size": [
+    0.2,
+    0.2,
+    0.24
+   ]
+  },
+  {
+   "name": "Fresnel 1K",
+   "kind": "fresnel",
+   "lumens": 7500,
+   "spotAngle": 12,
+   "floodAngle": 50,
+   "size": [
+    0.26,
+    0.26,
+    0.3
+   ]
+  },
+  {
+   "name": "Fresnel 2K",
+   "kind": "fresnel",
+   "lumens": 15000,
+   "spotAngle": 10,
+   "floodAngle": 48,
+   "size": [
+    0.34,
+    0.34,
+    0.38
+   ]
+  },
+  {
+   "name": "Softlight 2K",
+   "kind": "softlight",
+   "lumens": 18000,
+   "spotAngle": 100,
+   "floodAngle": 100,
+   "size": [
+    0.62,
+    0.46,
+    0.34
+   ]
+  },
+  {
+   "name": "Ellipsoidal 750",
+   "kind": "ellipsoidal",
+   "lumens": 6500,
+   "spotAngle": 20,
+   "floodAngle": 50,
+   "size": [
+    0.24,
+    0.24,
+    0.62
+   ]
+  }
+ ],
+ "gels": [
+  {
+   "name": "No gel",
+   "rgb": [
+    1,
+    1,
+    1
+   ]
+  },
+  {
+   "name": "Leeward 201 Full CT Blue",
+   "rgb": [
+    0.2914,
+    0.3642,
+    0.5203
+   ]
+  },
+  {
+   "name": "Leeward 202 Half CT Blue",
+   "rgb": [
+    0.469,
+    0.5244,
+    0.6268
+   ]
+  },
+  {
+   "name": "Leeward 203 Quarter CT Blue",
+   "rgb": [
+    0.6557,
+    0.6933,
+    0.758
+   ]
+  },
+  {
+   "name": "Leeward 204 Full CT Orange",
+   "rgb": [
+    0.6665,
+    0.5332,
+    0.3732
+   ]
+  },
+  {
+   "name": "Leeward 205 Half CT Orange",
+   "rgb": [
+    0.7724,
+    0.6908,
+    0.578
+   ]
+  },
+  {
+   "name": "Leeward 206 Quarter CT Orange",
+   "rgb": [
+    0.8513,
+    0.8051,
+    0.7365
+   ]
+  },
+  {
+   "name": "Rosmont 07 Pale Straw",
+   "rgb": [
+    0.8929,
+    0.8036,
+    0.4911
+   ]
+  },
+  {
+   "name": "Rosmont 02 Bastard Amber",
+   "rgb": [
+    0.8622,
+    0.6466,
+    0.4742
+   ]
+  },
+  {
+   "name": "Rosmont 20 Medium Amber",
+   "rgb": [
+    0.7441,
+    0.4614,
+    0.1637
+   ]
+  },
+  {
+   "name": "Rosmont 26 Primary Red",
+   "rgb": [
+    0.508,
+    0.0152,
+    0.0152
+   ]
+  },
+  {
+   "name": "Rosmont 46 Magenta",
+   "rgb": [
+    0.6115,
+    0.0734,
+    0.5197
+   ]
+  },
+  {
+   "name": "Rosmont 54 Special Lavender",
+   "rgb": [
+    0.54,
+    0.396,
+    0.72
+   ]
+  },
+  {
+   "name": "Rosmont 89 Moss Green",
+   "rgb": [
+    0.035,
+    0.2919,
+    0.0525
+   ]
+  },
+  {
+   "name": "Rosmont 70 Peacock Blue",
+   "rgb": [
+    0.0247,
+    0.3698,
+    0.4191
+   ]
+  },
+  {
+   "name": "Rosmont 66 Steel Blue",
+   "rgb": [
+    0.3639,
+    0.4962,
+    0.6616
+   ]
+  },
+  {
+   "name": "Rosmont 85 Deep Night Blue",
+   "rgb": [
+    0.0207,
+    0.0517,
+    0.2583
+   ]
+  }
+ ],
+ "modifiers": [
+  {
+   "name": "Nothing",
+   "fits": [
+    "fresnel",
+    "softlight",
+    "ellipsoidal"
+   ]
+  },
+  {
+   "name": "Barn doors, nearly open",
+   "fits": [
+    "fresnel",
+    "softlight"
+   ]
+  },
+  {
+   "name": "Barn doors, a slash",
+   "fits": [
+    "fresnel",
+    "softlight"
+   ]
+  },
+  {
+   "name": "Barn doors, a slit",
+   "fits": [
+    "fresnel",
+    "softlight"
+   ]
+  },
+  {
+   "name": "Flag off the top",
+   "fits": [
+    "fresnel",
+    "softlight"
+   ]
+  },
+  {
+   "name": "Flag off one side",
+   "fits": [
+    "fresnel",
+    "softlight"
+   ]
+  },
+  {
+   "name": "Cookie: leaves",
+   "fits": [
+    "fresnel",
+    "softlight"
+   ]
+  },
+  {
+   "name": "Cookie: breakup",
+   "fits": [
+    "fresnel",
+    "softlight"
+   ]
+  },
+  {
+   "name": "Cookie: branches",
+   "fits": [
+    "fresnel",
+    "softlight"
+   ]
+  },
+  {
+   "name": "Gobo: window",
+   "fits": [
+    "ellipsoidal"
+   ]
+  },
+  {
+   "name": "Gobo: venetian blinds",
+   "fits": [
+    "ellipsoidal"
+   ]
+  },
+  {
+   "name": "Gobo: church window",
+   "fits": [
+    "ellipsoidal"
+   ]
+  },
+  {
+   "name": "Gobo: bars",
+   "fits": [
+    "ellipsoidal"
+   ]
+  },
+  {
+   "name": "Gobo: leaf breakup",
+   "fits": [
+    "ellipsoidal"
+   ]
+  }
+ ],
+ "houseLevels": [
+  {
+   "name": "day",
+   "level": 1,
+   "tint": [
+    1,
+    1,
+    1
+   ]
+  },
+  {
+   "name": "overcast",
+   "level": 0.5,
+   "tint": [
+    0.95,
+    0.98,
+    1.05
+   ]
+  },
+  {
+   "name": "late afternoon",
+   "level": 0.25,
+   "tint": [
+    1.1,
+    0.95,
+    0.8
+   ]
+  },
+  {
+   "name": "dusk",
+   "level": 0.005,
+   "tint": [
+    0.75,
+    0.85,
+    1.1
+   ]
+  },
+  {
+   "name": "city night",
+   "level": 0.0005,
+   "tint": [
+    0.85,
+    0.8,
+    0.9
+   ]
+  },
+  {
+   "name": "moonlight",
+   "level": 3e-06,
+   "tint": [
+    0.55,
+    0.72,
+    1.1
+   ]
+  },
+  {
+   "name": "dark",
+   "level": 0,
+   "tint": [
+    1,
+    1,
+    1
+   ]
+  }
+ ],
+ "sceneLight": [
+  {
+   "name": "Indoors, room light (EV 9)",
+   "ev": 9
+  },
+  {
+   "name": "Indoors by big windows (EV 10)",
+   "ev": 10
+  },
+  {
+   "name": "Deep shade or dusk (EV 11)",
+   "ev": 11
+  },
+  {
+   "name": "Open shade or overcast (EV 12)",
+   "ev": 12
+  },
+  {
+   "name": "Bright overcast, dappled shade (EV 13)",
+   "ev": 13
+  },
+  {
+   "name": "Hazy sun (EV 14)",
+   "ev": 14
+  },
+  {
+   "name": "Bright sun (EV 15)",
+   "ev": 15
+  }
+ ]
+}
