@@ -167,6 +167,20 @@ def setup_render(scene):
         e.volumetric_end = max(e.volumetric_end, span * 1.5)
 
 
+def show(obj, ambient=False):
+    """Draw a fog object so its volume shows in Material Preview, EEVEE and Cycles (an object
+    displayed as Wire or Bounds is left out of EEVEE's viewport), while in Solid mode it is a
+    faint see-through box with its wireframe (ambient: just its bounds) over the scan."""
+    obj.display_type = 'TEXTURED'
+    obj.show_wire = not ambient
+    obj.show_bounds = ambient
+    mat = obj.active_material
+    if mat is not None:
+        c = mat.diffuse_color
+        mat.diffuse_color = (c[0], c[1], c[2], 0.0 if ambient else 0.08)
+    obj.visible_shadow = False          # fog dims light itself, as a volume; no surface shadow
+
+
 def update_patch(obj, scene):
     f = obj.vc_fog
     mat = obj.active_material
@@ -177,6 +191,8 @@ def update_patch(obj, scene):
           falloff_m=f.height_falloff, base_bu=lowest(obj, obj["vc_fog"]),
           amount=f.variation, size_m=f.variation_size, detail=f.variation_detail,
           seed=f.variation_seed, shape=obj["vc_fog"], softness=f.softness)
+    mat.diffuse_color = (*f.colour, 0.08)
+    show(obj)
     setup_render(scene)
 
 
@@ -207,7 +223,6 @@ def update_ambient(scene):
         from .ops import _unit_mesh
         obj = bpy.data.objects.new(AMBIENT_NAME, _unit_mesh('BOX', AMBIENT_NAME))
         obj["vc_ambient"] = True
-        obj.display_type = 'BOUNDS'
         obj.hide_select = True
         scene.collection.objects.link(obj)
         obj.data.materials.append(bpy.data.materials.new(AMBIENT_NAME))
@@ -216,6 +231,7 @@ def update_ambient(scene):
           anisotropy=vc.fog_anisotropy, falloff_m=vc.fog_falloff, base_bu=vc.fog_base,
           amount=vc.fog_variation, size_m=vc.fog_variation_size, detail=vc.fog_variation_detail,
           seed=vc.fog_variation_seed)
+    show(obj, ambient=True)
     setup_render(scene)
 
 
@@ -254,10 +270,23 @@ def on_depsgraph(scene, depsgraph):
                 _fit_ambient(amb, scan, scene.vc.fog_base)
 
 
+@persistent
+def on_load(_):
+    """Files saved before fog drew as a textured object showed no fog in the viewport."""
+    for o in bpy.data.objects:
+        if o.get("vc_fog") in ('BOX', 'SPHERE', 'CYLINDER') and o.display_type != 'TEXTURED':
+            show(o)
+        elif o.get("vc_ambient") and o.display_type != 'TEXTURED':
+            show(o, ambient=True)
+
+
 def register():
     bpy.app.handlers.depsgraph_update_post.append(on_depsgraph)
+    bpy.app.handlers.load_post.append(on_load)
 
 
 def unregister():
+    if on_load in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.remove(on_load)
     if on_depsgraph in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.remove(on_depsgraph)

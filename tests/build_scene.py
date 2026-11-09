@@ -214,7 +214,7 @@ def build_and_check(scan_path, tag):
           abs(nodes["VC Density"].outputs[0].default_value - 3.912 / 4) < 1e-5 and
           abs(vnode.inputs["Color"].default_value[0] - 0.8) < 1e-6 and vnode.inputs["Density"].is_linked and
           any(n.type == 'MAP_RANGE' for n in nodes) and any(n.type == 'TEX_NOISE' for n in nodes) and
-          mist.display_type == 'WIRE')
+          mist.display_type == 'TEXTURED' and mist.show_wire)
 
     spk = ops.add_speaker(ctx, D + "stream.wav", location=(-2, -1, 0.3))
     spk.data.volume = 0.7

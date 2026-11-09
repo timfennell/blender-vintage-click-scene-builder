@@ -102,7 +102,6 @@ def add_fog_patch(context, shape, location=None):
     name = "VC Fog " + shape.title()
     obj = bpy.data.objects.new(name, _unit_mesh(shape, name))
     obj["vc_fog"] = shape
-    obj.display_type = 'WIRE'               # wire in the solid viewport; the volume renders
     context.collection.objects.link(obj)
     obj.location = location if location is not None else context.scene.cursor.location
     context.view_layer.update()
