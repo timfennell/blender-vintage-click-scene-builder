@@ -29,8 +29,21 @@ class VCS_PT_scene(_Panel, bpy.types.Panel):
             sc = scan.matrix_world.to_scale()
             if max(sc) - min(sc) > 1e-4 * max(abs(max(sc)), 1e-9):
                 col.label(text="Scale it evenly: the game takes one scale", icon='ERROR')
-        if bundle.splat_patch() is None:
+        gsp = bundle.splat_patch()
+        if gsp is None:
             layout.prop(vc, "source_ply")
+        if scan is not None:
+            extra = bundle.merged_in(context.scene, scan)
+            if extra:
+                box = layout.box()
+                box.label(text=f"Also saved into the scene's splats ({len(extra)}):", icon='AUTOMERGE_ON')
+                for o in extra:
+                    box.label(text=o.name, icon='POINTCLOUD_DATA')
+                box.label(text="Turn off Show in Renders to leave one out")
+                if gsp is None:
+                    box.label(text="Needs Splat Patch enabled to merge", icon='ERROR')
+        if hasattr(bpy.types, "GSP_OT_convert_mesh"):
+            layout.operator("gsp.convert_mesh", text="Convert Meshes to Splats", icon='POINTCLOUD_DATA')
         layout.prop(vc, "kind", expand=True)
         layout.prop(vc, "ev")
         layout.separator()

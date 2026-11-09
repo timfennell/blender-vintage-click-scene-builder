@@ -32,8 +32,8 @@ def splat_patch():
     for name in names:
         try:
             pkg = importlib.import_module(name)
-            importlib.import_module(name + ".ply_io")
-            importlib.import_module(name + ".lod")
+            for mod in ("ply_io", "lod", "merge", "splats"):
+                importlib.import_module(f"{name}.{mod}")
             return pkg
         except ImportError:
             continue
@@ -230,19 +230,71 @@ def describe(context, scan):
     return j, files, problems
 
 
+def merged_in(scene, scan):
+    """Other splat objects that go into scene.ply with the scan: every splat object in the
+    scene that shows in renders (props made with Convert to Splats, other scans). Turn
+    off an object's Show in Renders to leave it out."""
+    from .props import is_splat
+    return sorted((o for o in scene.objects
+                   if o is not scan and is_splat(o) and not o.hide_render and not o.get("vc_ambient")),
+                  key=lambda o: o.name)
+
+
+# Splat Patch's own bookkeeping for a work area: not splat data.
+_WORK_COLUMNS = ("gsp_locked", "gsp_full_index", "gsp_in_work")
+
+
 def write_ply(context, scan, path):
     """scene.ply: Splat Patch's writer when it is enabled (erased splats left out, a work
-    area synced first), else a copy of the scan's source .ply. Returns how it was made."""
+    area synced first), with every other splat object in the scene merged in, in the scan's
+    space; else a copy of the scan's source .ply. Returns (how it was made, notes)."""
     gsp = splat_patch()
+    extra = merged_in(context.scene, scan)
     if gsp is not None:
         gsp.lod.sync(scan)
-        gsp.ply_io.write_pointcloud_ply(path, gsp.lod.full_data(scan))
-        return "Splat Patch"
+        if not extra:
+            gsp.ply_io.write_pointcloud_ply(path, gsp.lod.full_data(scan))
+            return "Splat Patch", []
+        return "Splat Patch, merged", _write_merged(gsp, scan, extra, path)
+    if extra:
+        raise BundleError(f"{len(extra)} more splat object(s) to merge in ({', '.join(o.name for o in extra)}) "
+                          "need Splat Patch enabled; turn off their Show in Renders to leave them out")
     src = bpy.path.abspath(context.scene.vc.source_ply)
     if not src or not os.path.isfile(src):
         raise BundleError("Splat Patch isn't enabled to write the splats, and no Source PLY is set")
     shutil.copyfile(src, path)
-    return "source copy"
+    return "source copy", []
+
+
+def _write_merged(gsp, scan, extra, path):
+    """The scan plus the other splat objects, carried into the scan's space (positions,
+    rotations, sizes and view-dependent colour, by Splat Patch's merge), written without
+    the erased splats."""
+    import numpy as np
+    to_scan = np.linalg.inv(np.array(scan.matrix_world, np.float64))
+    parts, notes = [], []
+    for ob in [scan] + extra:
+        gsp.lod.sync(ob)
+        S = gsp.splats.SplatSet.read(gsp.lod.full_data(ob))
+        for name in _WORK_COLUMNS:
+            S.arrays.pop(name, None)
+        if ob is scan:
+            parts.append(S.arrays)
+        else:
+            rows, why = gsp.merge.transform_rows(S.arrays, to_scan @ np.array(ob.matrix_world, np.float64))
+            parts.append(rows)
+            notes += [f"{ob.name}: {w}" for w in why]
+        del S
+    merged = gsp.splats.set_from_rows(gsp.splats.concat_rows(parts))
+    parts.clear()
+    pc = bpy.data.pointclouds.new("vc_scene_merge")
+    try:
+        merged.write(pc)
+        del merged
+        gsp.ply_io.write_pointcloud_ply(path, pc)
+    finally:
+        bpy.data.pointclouds.remove(pc)
+    return notes
 
 
 def extras(scene):
@@ -271,7 +323,8 @@ def save(context, scan, filepath):
     tmpdir = tempfile.mkdtemp(prefix="vcscene_")
     try:
         ply = os.path.join(tmpdir, "scene.ply")
-        write_ply(context, scan, ply)
+        _, notes = write_ply(context, scan, ply)
+        problems += [f"Approximated: {n}" for n in notes]
         part = filepath + ".part"
         with zipfile.ZipFile(part, "w", zipfile.ZIP_DEFLATED) as z:
             z.writestr("scene.json", json.dumps(j, indent=2))

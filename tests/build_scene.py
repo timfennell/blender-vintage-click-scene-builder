@@ -16,6 +16,7 @@ import zipfile
 from types import SimpleNamespace
 
 import bpy
+import numpy as np
 from mathutils import Euler, Matrix, Vector
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -89,6 +90,15 @@ def differences(a, b, path="", tol=2e-4, strip_names=False):
     if isinstance(a, (int, float)) and isinstance(b, (int, float)) and not isinstance(a, bool):
         return [] if abs(a - b) <= tol * max(1, abs(a)) else [f"{path}: {a} vs {b}"]
     return [] if a == b else [f"{path}: {a!r} vs {b!r}"]
+
+
+def ply_positions(data):
+    """x, y, z of every splat in a binary PLY (all-float properties, as Splat Patch writes)."""
+    end = data.index(b"end_header\n") + len(b"end_header\n")
+    head = data[:end].decode()
+    n = int(next(l.split()[2] for l in head.splitlines() if l.startswith("element vertex")))
+    k = sum(1 for l in head.splitlines() if l.startswith("property"))
+    return np.frombuffer(data, "<f4", n * k, end).reshape(n, k)[:, :3]
 
 
 def ply_count(data):
@@ -395,6 +405,62 @@ def build_and_check(scan_path, tag):
     s3 = bundle.describe(ctx, scan)[0]
     check(f"[{tag}] no fog key when ambient fog is off", "fog" not in s3 and
           fog.ambient_object(scene) is None and len(s3["fogVolumes"]) == 1)
+    # Other splat objects are merged into scene.ply in the scan's space; one hidden from
+    # renders is left out.
+    from gs_patch.splats import SplatSet
+    prop = bpy.data.objects.new("Prop splats", scan.data.copy())
+    scene.collection.objects.link(prop)
+    prop.location, prop.rotation_euler, prop.scale = (2, -1, 0.5), (0.3, 0.2, 1.0), (0.1, 0.1, 0.1)
+    PS = SplatSet.read(prop.data); m = np.zeros(PS.n, bool); m[:100] = True; PS.hide(m); PS.write(prop.data); del PS
+    left_out = bpy.data.objects.new("Left out", scan.data.copy())
+    scene.collection.objects.link(left_out)
+    left_out.hide_render = True
+    ctx.view_layer.update()
+    check(f"[{tag}] the panel's merge list", bundle.merged_in(scene, scan) == [prop])
+    mout = D + f"merged_{tag}.vcscene"
+    _, mprob = bundle.save(ctx, scan, mout)
+    mply = zipfile.ZipFile(mout).read("scene.ply")
+    check(f"[{tag}] merged scene.ply has the scan and the prop (less its erased splats)",
+          ply_count(mply) == 2 * n_points - 100, f"{ply_count(mply)} vs {2 * n_points - 100}")
+    pos = ply_positions(mply)
+    local = Vector(prop.data.attributes["position"].data[100].vector)
+    want = scan.matrix_world.inverted() @ (prop.matrix_world @ local)
+    check(f"[{tag}] a merged splat sits where it does in Blender", close(pos[n_points], want, 1e-4),
+          f"{tuple(pos[n_points])} vs {tuple(want)}")
+    check(f"[{tag}] a rotated, evenly scaled prop merges with no approximations", not mprob, str(mprob))
+    real_sp = bundle.splat_patch
+    bundle.splat_patch = lambda: None
+    vc.source_ply = scan_path
+    try:
+        bundle.save(ctx, scan, D + "nomerge.vcscene")
+        check(f"[{tag}] merging without Splat Patch is refused", False)
+    except bundle.BundleError as e:
+        check(f"[{tag}] merging without Splat Patch is refused", "Prop splats" in str(e), str(e))
+    finally:
+        bundle.splat_patch = real_sp
+        vc.source_ply = ""
+    for o in (prop, left_out):
+        bpy.data.objects.remove(o)
+
+    # A mesh through Convert to Splats goes in too.
+    bpy.ops.mesh.primitive_cube_add(size=0.6, location=(0.5, 0.5, 0.3))
+    cube = ctx.active_object
+    p = scene.gsp
+    p.conv_spacing, p.conv_lighting, p.conv_degree = 0.03, 'HEADLIGHT', '0'
+    r = bpy.ops.gsp.convert_mesh()
+    made = [o for o in scene.objects if o.get("gsp_mesh_source") == cube.name]
+    check(f"[{tag}] Convert to Splats makes a splat object the builder picks up",
+          r == {'FINISHED'} and len(made) == 1 and bundle.merged_in(scene, scan) == made)
+    if made:
+        n_made = len(made[0].data.points)
+        bundle.save(ctx, scan, D + f"converted_{tag}.vcscene")
+        cply = zipfile.ZipFile(D + f"converted_{tag}.vcscene").read("scene.ply")
+        check(f"[{tag}] converted splats are in scene.ply", ply_count(cply) == n_points + n_made,
+              f"{ply_count(cply)} = {n_points} + {n_made}")
+        bpy.data.objects.remove(made[0])
+    bpy.data.objects.remove(cube)
+    ctx.view_layer.objects.active = scan
+
     if tag == "0":
         print(json.dumps(s, indent=1)[:1500])
 

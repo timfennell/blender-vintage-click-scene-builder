@@ -41,7 +41,12 @@ saves it as one self-contained `.vcscene` file the game opens.
   *Full Within* and *Silent Beyond* distances. **Ambience** holds beds that play everywhere.
 
 Splat Patch (gs_patch) writes `scene.ply` when it is enabled (erased splats left out, a work
-area synced first). Without it, set **Source PLY** and the file is copied in as it is.
+area synced first). Every other splat object in the scene that shows in renders is merged
+into it, in the scan's space, positions, rotations, sizes and view-dependent colour carried
+across: props made with **Convert Meshes to Splats** (Splat Patch's converter, also on the
+Scene panel) or other scans. The Scene panel lists them; turn off an object's Show in
+Renders to leave it out. The objects themselves are left as they are. A reopened bundle
+comes back as one scan with them merged in. Without it, set **Source PLY** and the file is copied in as it is.
 
 ## The `.vcscene` file
 
