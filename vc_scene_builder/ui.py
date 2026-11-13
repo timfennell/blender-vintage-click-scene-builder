@@ -150,6 +150,18 @@ class VCS_PT_fog(_Panel, bpy.types.Panel):
         col.prop(vc, "fog_anisotropy")
         _variation(col, vc, "fog_")
         layout.separator()
+        layout.prop(vc, "ground_fog")
+        col = layout.column()
+        col.active = vc.ground_fog
+        col.prop(vc, "ground_visibility", text="Visibility (m)")
+        row = col.row(align=True)
+        row.prop(vc, "ground_level")
+        row.operator("vcs.ground_from_cursor", text="", icon='EYEDROPPER')
+        col.prop(vc, "ground_depth", text="Depth (m)")
+        col.prop(vc, "ground_fade", text="Fade (m)")
+        col.prop(vc, "ground_patchiness")
+        col.prop(vc, "ground_drift", text="Drift Size (m)")
+        layout.separator()
         layout.operator_menu_enum("vcs.add_fog_patch", "shape", text="Add Fog Patch", icon='OUTLINER_DATA_VOLUME')
         active = context.active_object
         for o in bundle.fog_patches(context.scene):

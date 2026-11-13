@@ -194,6 +194,17 @@ class VCS_OT_add_fog_patch(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class VCS_OT_ground_from_cursor(bpy.types.Operator):
+    """Set the ground fog's ground level to the 3D cursor's height (click the ground first to put the cursor there)"""
+    bl_idname = "vcs.ground_from_cursor"
+    bl_label = "Ground Level from 3D Cursor"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        context.scene.vc.ground_level = context.scene.cursor.location.z
+        return {'FINISHED'}
+
+
 class VCS_OT_select(bpy.types.Operator):
     """Select this object"""
     bl_idname = "vcs.select"
@@ -327,7 +338,7 @@ def menu_export(self, context):
     self.layout.operator(VCS_OT_save.bl_idname, text="Vintage Click Scene (.vcscene)")
 
 
-CLASSES = (VCS_OT_set_start, VCS_OT_add_light, VCS_OT_add_bound, VCS_OT_add_fog_patch, VCS_OT_select, VCS_OT_add_sound,
+CLASSES = (VCS_OT_set_start, VCS_OT_add_light, VCS_OT_add_bound, VCS_OT_add_fog_patch, VCS_OT_ground_from_cursor, VCS_OT_select, VCS_OT_add_sound,
            VCS_OT_ambience_add, VCS_OT_ambience_remove, VCS_OT_save, VCS_OT_open_scene)
 
 

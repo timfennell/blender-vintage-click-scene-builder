@@ -250,6 +250,91 @@ def _fit_ambient(obj, scan, base_z):
         obj.location, obj.scale = centre, half
 
 
+# ---------------------------------------------------------------- ground fog
+GROUND_NAME = "VC Ground Fog (preview)"
+
+
+def ground_object(scene):
+    """This scene's ground fog preview slab, if it has one."""
+    return next((o for o in scene.objects if o.get("vc_ground")), None)
+
+
+def build_ground(mat, scene, *, visibility, level_bu, depth_m, fade_m, patchiness, drift_m):
+    """The game's ground fog: full density from the ground level up to `depth`, then falling
+    by e every `fade` above; none below the ground. Times drifts: 3 octaves of noise at
+    `drift` scale, flattened along up, patchiness taking it from even (0) to drifts with
+    clear air between (1). (Blender's noise, not the game's: the same character.)"""
+    s = scene.unit_settings.scale_length
+    depth_bu, fade_bu, drift_bu = depth_m / s, max(fade_m / s, 1e-4), max(drift_m / s, 1e-4)
+    g = _Graph(mat)
+    pos = g.node("ShaderNodeNewGeometry").outputs["Position"]
+    z = g.node("ShaderNodeSeparateXYZ", Vector=pos).outputs["Z"]
+    density = g.value("VC Density", sigma(visibility, scene))
+    level = g.value("VC Level", level_bu)
+    h = g.math('SUBTRACT', z, level)
+    above = g.math('MAXIMUM', g.math('SUBTRACT', h, depth_bu), 0.0)
+    profile = g.math('EXPONENT', g.math('MULTIPLY', above, -1.0 / fade_bu))
+    profile = g.math('MULTIPLY', profile, g.math('GREATER_THAN', h, 0.0))     # none below
+    density = g.math('MULTIPLY', density, profile)
+    if patchiness > 0:
+        mapping = g.node("ShaderNodeMapping", Vector=pos)
+        mapping.inputs["Scale"].default_value = (1 / drift_bu, 1 / drift_bu, 4 / drift_bu)   # flat drifts
+        noise = g.node("ShaderNodeTexNoise", Vector=mapping.outputs["Vector"])
+        noise.inputs["Scale"].default_value = 1.0
+        noise.inputs["Detail"].default_value = 2.0             # 3 octaves
+        d = g.math('MULTIPLY_ADD', g.math('SUBTRACT', noise.outputs["Fac"], 0.5), 4.0, 0.5)
+        d = g.math('MAXIMUM', g.math('MINIMUM', d, 1.0), 0.0)
+        density = g.math('MULTIPLY', density, g.math('MULTIPLY_ADD', d, patchiness, 1.0 - patchiness))
+    vol = g.node("ShaderNodeVolumePrincipled")
+    vol.inputs["Color"].default_value = (1, 1, 1, 1)
+    vol.inputs["Anisotropy"].default_value = 0.6
+    g.put(vol.inputs["Density"], density)
+    out = g.node("ShaderNodeOutputMaterial")
+    g.nt.links.new(vol.outputs[0], out.inputs["Volume"])
+
+
+def update_ground(scene):
+    """A flat slab round the scan carrying the ground fog preview; removed when it is off."""
+    from .props import scan_of_scene
+    vc = scene.vc
+    obj = ground_object(scene)
+    scan = scan_of_scene(scene)
+    if not vc.ground_fog or scan is None:
+        if obj is not None:
+            me = obj.data
+            bpy.data.objects.remove(obj)
+            if me.users == 0:
+                bpy.data.meshes.remove(me)
+        return
+    if obj is None:
+        from .ops import _unit_mesh
+        obj = bpy.data.objects.new(GROUND_NAME, _unit_mesh('BOX', GROUND_NAME))
+        obj["vc_ground"] = True
+        obj.hide_select = True
+        scene.collection.objects.link(obj)
+        obj.data.materials.append(bpy.data.materials.new(GROUND_NAME))
+    _fit_ground(obj, scan, scene)
+    s = scene.unit_settings.scale_length
+    build_ground(obj.active_material, scene, visibility=vc.ground_visibility, level_bu=vc.ground_level,
+                 depth_m=vc.ground_depth, fade_m=vc.ground_fade, patchiness=vc.ground_patchiness,
+                 drift_m=vc.ground_drift)
+    show(obj, ambient=True)
+    setup_render(scene)
+
+
+def _fit_ground(obj, scan, scene):
+    vc = scene.vc
+    s = scene.unit_settings.scale_length
+    pts = [scan.matrix_world @ Vector(c) for c in scan.bound_box]
+    lo = Vector((min(p[i] for p in pts) for i in range(2)))
+    hi = Vector((max(p[i] for p in pts) for i in range(2)))
+    top = vc.ground_level + (vc.ground_depth + 5 * vc.ground_fade) / s     # e^-5: next to nothing
+    centre = Vector(((lo.x + hi.x) / 2, (lo.y + hi.y) / 2, (vc.ground_level + top) / 2))
+    half = Vector(((hi.x - lo.x) / 2 * 1.2, (hi.y - lo.y) / 2 * 1.2, max((top - vc.ground_level) / 2, 0.01)))
+    if (obj.location - centre).length > 1e-5 or (Vector(obj.scale) - half).length > 1e-5:
+        obj.location, obj.scale = centre, half
+
+
 @persistent
 def on_depsgraph(scene, depsgraph):
     """Keep patch bases on their lowest points and the ambient box round the scan as
@@ -268,6 +353,10 @@ def on_depsgraph(scene, depsgraph):
             amb = ambient_object(scene)
             if amb is not None:
                 _fit_ambient(amb, scan, scene.vc.fog_base)
+        if scan is not None and obj == scan and scene.vc.ground_fog:
+            gr = ground_object(scene)
+            if gr is not None:
+                _fit_ground(gr, scan, scene)
 
 
 @persistent
@@ -276,7 +365,7 @@ def on_load(_):
     for o in bpy.data.objects:
         if o.get("vc_fog") in ('BOX', 'SPHERE', 'CYLINDER') and o.display_type != 'TEXTURED':
             show(o)
-        elif o.get("vc_ambient") and o.display_type != 'TEXTURED':
+        elif (o.get("vc_ambient") or o.get("vc_ground")) and o.display_type != 'TEXTURED':
             show(o, ambient=True)
 
 

@@ -204,6 +204,11 @@ def describe(context, scan):
     j["bounds"] = out
 
     vc = scene.vc
+    if vc.ground_fog:
+        j["groundFog"] = {"visibilityM": round(vc.ground_visibility, 4),
+                          "level": _vec(sp.point((0, 0, vc.ground_level))),
+                          "depthM": round(vc.ground_depth, 4), "fadeM": round(vc.ground_fade, 4),
+                          "patchiness": round(vc.ground_patchiness, 4), "driftM": round(vc.ground_drift, 4)}
     if vc.fog:
         j["fog"] = {"visibilityM": round(vc.fog_visibility, 4), "colour": _vec(vc.fog_colour, 4),
                     "heightFalloffM": round(vc.fog_falloff, 4),

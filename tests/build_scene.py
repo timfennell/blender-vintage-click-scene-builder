@@ -196,6 +196,17 @@ def build_and_check(scan_path, tag):
     vc.fog_variation = 0.5
     vc.fog_variation_size = 12
     vc.fog_variation_seed = 3
+    vc.ground_level = 0.25
+    vc.ground_depth, vc.ground_fade, vc.ground_patchiness, vc.ground_drift = 0.6, 0.4, 0.7, 3
+    vc.ground_fog = True
+    gr = fog.ground_object(scene)
+    check(f"[{tag}] ground fog previews in a flat slab from the ground up",
+          gr is not None and abs((gr.location.z - gr.scale.z) - 0.25) < 1e-5 and
+          abs(gr.active_material.node_tree.nodes["VC Density"].outputs[0].default_value - 3.912 / 6) < 1e-5)
+    scene.cursor.location.z = 0.3
+    bpy.ops.vcs.ground_from_cursor()
+    check(f"[{tag}] ground level from the 3D cursor", abs(vc.ground_level - 0.3) < 1e-6)
+    vc.ground_level = 0.25
     amb = fog.ambient_object(scene)
     check(f"[{tag}] ambient fog previews in a box round the scan", amb is not None and amb.active_material is not None
           and any(n.type == 'TEX_NOISE' for n in amb.active_material.node_tree.nodes))
@@ -292,6 +303,10 @@ def build_and_check(scan_path, tag):
           close(fg["colour"], (0.9, 0.95, 1.0)) and fg["anisotropy"] == 0.7 and
           fg["variation"] == {"amount": 0.5, "sizeM": 12, "detail": 3, "seed": 3}, str(fg))
     check(f"[{tag}] fog base round-trips", close(M @ Vector(fg["base"]), (0, 0, 0.4)))
+    gf = s.get("groundFog", {})
+    check(f"[{tag}] ground fog written", gf.get("visibilityM") == 6 and gf.get("depthM") == 0.6 and
+          gf.get("fadeM") == 0.4 and gf.get("patchiness") == 0.7 and gf.get("driftM") == 3, str(gf))
+    check(f"[{tag}] ground fog level round-trips", close(M @ Vector(gf["level"]), (0, 0, 0.25)))
     fv = s["fogVolumes"]
     check(f"[{tag}] one fog patch", len(fv) == 1 and fv[0]["shape"] == "box" and fv[0]["visibilityM"] == 4
           and fv[0]["softness"] == 0.5 and close(fv[0]["colour"], (0.8, 0.85, 0.9)) and fv[0]["heightFalloffM"] == 0.5
@@ -357,7 +372,11 @@ def build_and_check(scan_path, tag):
     # The fog's base is a plane across `up`: only its height along up has to match.
     base_h = [Vector(x["fog"].pop("base")).dot(Vector(x["up"])) for x in (s_bare, dict(s, fog=dict(s["fog"])))]
     check(f"[{tag}] a bare bundle keeps the fog's base height", abs(base_h[0] - base_h[1]) < 1e-4, str(base_h))
-    s_cmp = dict(s, fog={k: v for k, v in s["fog"].items() if k != "base"})
+    level_h = [Vector(x["groundFog"].pop("level")).dot(Vector(x["up"]))
+               for x in (s_bare, dict(s, groundFog=dict(s["groundFog"])))]
+    check(f"[{tag}] a bare bundle keeps the ground fog's level", abs(level_h[0] - level_h[1]) < 1e-4, str(level_h))
+    s_cmp = dict(s, fog={k: v for k, v in s["fog"].items() if k != "base"},
+                 groundFog={k: v for k, v in s["groundFog"].items() if k != "level"})
     bare_diffs = differences({k: v for k, v in s_cmp.items() if k != "blender"},
                              {k: v for k, v in s_bare.items() if k != "blender"}, strip_names=True)
     check(f"[{tag}] a bare bundle reopens to the same scene", not bare_diffs, "; ".join(bare_diffs[:6]))
@@ -403,6 +422,9 @@ def build_and_check(scan_path, tag):
     bpy.data.objects.remove(ball_fog)
     vc.fog = False
     s3 = bundle.describe(ctx, scan)[0]
+    vc.ground_fog = False
+    s3 = bundle.describe(ctx, scan)[0]
+    check(f"[{tag}] no groundFog key when ground fog is off", "groundFog" not in s3 and fog.ground_object(scene) is None)
     check(f"[{tag}] no fog key when ambient fog is off", "fog" not in s3 and
           fog.ambient_object(scene) is None and len(s3["fogVolumes"]) == 1)
     # Other splat objects are merged into scene.ply in the scan's space; one hidden from

@@ -34,6 +34,10 @@ saves it as one self-contained `.vcscene` file the game opens.
   *Beam in Fog* sets how strongly. Blender previews all this with volume materials (the
   ambient fog in a box round the scan) and turns on EEVEE's volumetric shadows; Cycles
   shows it too. Light modifiers (doors, cookies, gobos) aren't previewed in Blender yet.
+- **Ground fog**: a layer lying on the ground: visibility inside it, the ground level
+  (the eyedropper takes the 3D cursor's height), how deep it lies thick, how softly its top
+  fades, patchiness (even ... drifts with clear air) and drift size. Previewed in a flat
+  slab round the scan; written as `groundFog` with `level` in PLY space.
 - **Bounds**: *Add Bound Box / Sphere / Cylinder* add a movement bound (an empty drawn as a
   cube or sphere; a wireframe unit cylinder along its local Z). Move, rotate and scale them
   freely, unevenly too. The camera may go anywhere inside their union; no bounds, no limit.

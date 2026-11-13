@@ -278,6 +278,11 @@ class VCFogPatch(bpy.types.PropertyGroup):
     variation_seed: _pv["seed"]
 
 
+def _ground_update(self, context):
+    from . import fog
+    fog.update_ground(self.id_data)
+
+
 _av = _variation_props(_ambient_update, 20.0)
 
 
@@ -323,6 +328,23 @@ class VCSceneSettings(bpy.types.PropertyGroup):
     fog_variation_size: _av["size"]
     fog_variation_detail: _av["detail"]
     fog_variation_seed: _av["seed"]
+    ground_fog: bpy.props.BoolProperty(name="Ground Fog", update=_ground_update,
+                                       description="A layer of fog lying on the ground, thick up to its depth and thinning above")
+    ground_visibility: bpy.props.FloatProperty(name="Visibility", min=0.1, soft_max=200, default=6,
+                                               update=_ground_update,
+                                               description="How far you can see inside the layer (metres)")
+    ground_level: bpy.props.FloatProperty(name="Ground Level", default=0, unit='LENGTH', update=_ground_update,
+                                          description="World Z of the ground the fog lies on (none below it)")
+    ground_depth: bpy.props.FloatProperty(name="Depth", min=0, soft_max=20, default=0.8, update=_ground_update,
+                                          description="How deep it lies thick above the ground (metres)")
+    ground_fade: bpy.props.FloatProperty(name="Fade", min=0.01, soft_max=20, default=0.5, update=_ground_update,
+                                         description="How softly its top thins: it falls by e every this many metres above its depth")
+    ground_patchiness: bpy.props.FloatProperty(name="Patchiness", min=0, max=1, default=0.5, subtype='FACTOR',
+                                               update=_ground_update,
+                                               description="Even (0) ... drifts with clear air between (1)")
+    ground_drift: bpy.props.FloatProperty(name="Drift Size", min=0.05, soft_max=100, default=4,
+                                          update=_ground_update,
+                                          description="Size of the drifts and clearings (metres)")
 
 
 CLASSES = (VCLightSettings, VCAmbience, VCFogPatch, VCSceneSettings)

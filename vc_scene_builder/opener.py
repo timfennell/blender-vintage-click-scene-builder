@@ -217,6 +217,16 @@ def open_bundle(context, path):
             obj.empty_display_size = 1.0
         obj.matrix_world = M @ _matrix(bd["matrix"])
 
+    gf = j.get("groundFog")
+    if gf:
+        vc.ground_visibility = float(gf.get("visibilityM", 6))
+        vc.ground_level = pos(gf["level"]).z if "level" in gf else 0.0
+        vc.ground_depth = float(gf.get("depthM", 0.8))
+        vc.ground_fade = float(gf.get("fadeM", 0.5))
+        vc.ground_patchiness = float(gf.get("patchiness", 0.5))
+        vc.ground_drift = float(gf.get("driftM", 4))
+        vc.ground_fog = True                            # last: it builds the preview
+
     fg = j.get("fog")
     if fg:
         vc.fog_visibility = float(fg.get("visibilityM", 300))
@@ -255,4 +265,5 @@ def open_bundle(context, path):
 
     scene.view_layers[0].update()
     fog.update_ambient(scene)
+    fog.update_ground(scene)
     return scene, notes
